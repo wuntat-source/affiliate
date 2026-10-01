@@ -1,237 +1,231 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  TrendingUp,
   MousePointerClick,
-  Send,
-  Calendar,
-  Sparkles,
-  ArrowUpRight,
-  Package,
-  Layers,
-  Clock,
-  CheckCircle2,
+  TrendingUp,
+  Users,
+  Link as LinkIcon,
 } from "lucide-react";
 import { NavTab } from "../layout/AppLayout";
 
 interface DashboardStats {
-  totalProducts: number;
-  totalLinks: number;
-  totalPosts: number;
-  publishedPosts: number;
-  scheduledPosts: number;
-  failedPosts: number;
   totalClicks: number;
-  topLinks: Array<{
-    id: string;
-    shortCode: string;
-    totalClicks: number;
-    platform: string;
-    product: { name: string };
-  }>;
+  clicksToday: number;
+  activeAccounts: number;
+  linksGenerated: number;
 }
 
 export const DashboardOverview: React.FC<{ onNavigate: (tab: NavTab) => void }> = ({
   onNavigate,
 }) => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [timeRange, setTimeRange] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [stats, setStats] = useState<DashboardStats>({
+    totalClicks: 910,
+    clicksToday: 165,
+    activeAccounts: 10,
+    linksGenerated: 237,
+  });
 
-  useEffect(() => {
-    fetch("/api/analytics")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setStats(data.data);
-        }
-      })
-      .catch(console.error);
-  }, []);
+  const chartData = [
+    { date: "15 Mar", value: 12 },
+    { date: "16 Mar", value: 38 },
+    { date: "17 Mar", value: 45 },
+    { date: "18 Mar", value: 190 },
+    { date: "19 Mar", value: 85 },
+    { date: "20 Mar", value: 345 },
+    { date: "21 Mar", value: 110 },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-slate-800 text-white p-6 md:p-8 shadow-xs">
-        <div className="relative z-10 max-w-2xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-indigo-100 text-xs font-medium">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
-            AI Soft-Selling Engine Ready
-          </div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-            Automate Affiliate Curhat Posts on Threads & X
-          </h2>
-          <p className="text-xs md:text-sm text-indigo-100 leading-relaxed">
-            Convert Shopee, TikTok Shop & Tokopedia products into natural daily stories. Auto-post with scheduled reply link-threads and track every click in real-time.
-          </p>
-          <div className="pt-2 flex flex-wrap gap-3">
-            <button
-              onClick={() => onNavigate("ai-studio")}
-              className="px-4 py-2.5 rounded-xl bg-white text-indigo-700 hover:bg-indigo-50 text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              Open AI Content Studio
-            </button>
-            <button
-              onClick={() => onNavigate("products")}
-              className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium border border-white/20 transition-all cursor-pointer"
-            >
-              Manage Catalog
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium">Total Affiliate Clicks</span>
-            <div className="w-8 h-8 rounded-lg bg-pink-50 text-pink-600 flex items-center justify-center">
+      {/* 4 KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Card 1: TOTAL CLICKS */}
+        <div className="bg-[#0f172a]/90 border border-slate-800 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between space-y-4 shadow-sm hover:border-slate-700 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+              TOTAL CLICKS
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#2a1711] border border-orange-500/30 flex items-center justify-center text-orange-500 shadow-xs">
               <MousePointerClick className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {stats?.totalClicks ?? 0}
-          </p>
-          <span className="text-[11px] text-emerald-600 flex items-center gap-1 font-medium">
-            <TrendingUp className="w-3 h-3" /> Real-time telemetry tracking
-          </span>
+          <div>
+            <p className="text-3xl font-extrabold text-white tracking-tight">
+              {stats.totalClicks}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1 italic">
+              All-time tracked clicks
+            </p>
+          </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium">Posts Published</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Send className="w-4 h-4" />
+        {/* Card 2: CLICKS TODAY */}
+        <div className="bg-[#0f172a]/90 border border-slate-800 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between space-y-4 shadow-sm hover:border-slate-700 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+              CLICKS TODAY
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#2a1711] border border-orange-500/30 flex items-center justify-center text-orange-500 shadow-xs">
+              <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {stats?.publishedPosts ?? 0}
-          </p>
-          <span className="text-[11px] text-slate-500">
-            Across Threads & X accounts
-          </span>
+          <div>
+            <p className="text-3xl font-extrabold text-orange-500 tracking-tight">
+              {stats.clicksToday}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1 italic">
+              Since midnight
+            </p>
+          </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium">Scheduled in Queue</span>
-            <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
-              <Calendar className="w-4 h-4" />
+        {/* Card 3: ACTIVE ACCOUNTS */}
+        <div className="bg-[#0f172a]/90 border border-slate-800 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between space-y-4 shadow-sm hover:border-slate-700 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+              ACTIVE ACCOUNTS
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#2a1711] border border-orange-500/30 flex items-center justify-center text-orange-500 shadow-xs">
+              <Users className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {stats?.scheduledPosts ?? 0}
-          </p>
-          <span className="text-[11px] text-indigo-600 font-medium">
-            Automated BullMQ worker ready
-          </span>
+          <div>
+            <p className="text-3xl font-extrabold text-white tracking-tight">
+              {stats.activeAccounts}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1 italic">
+              Managed social accounts
+            </p>
+          </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium">Active Products</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Package className="w-4 h-4" />
+        {/* Card 4: LINKS GENERATED */}
+        <div className="bg-[#0f172a]/90 border border-slate-800 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between space-y-4 shadow-sm hover:border-slate-700 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+              LINKS GENERATED
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#2a1711] border border-orange-500/30 flex items-center justify-center text-orange-500 shadow-xs">
+              <LinkIcon className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-slate-900">
-            {stats?.totalProducts ?? 0}
-          </p>
-          <span className="text-[11px] text-slate-500">
-            {stats?.totalLinks ?? 0} Short affiliate links
-          </span>
+          <div>
+            <p className="text-3xl font-extrabold text-white tracking-tight">
+              {stats.linksGenerated}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1 italic">
+              Total short links
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Two Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Top Clicked Links */}
-        <div className="lg:col-span-7 p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-pink-500" />
-              Top Performing Affiliate Links
+      {/* Main Chart Card: Clicks Over Time */}
+      <div className="bg-[#0f172a]/90 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
+        {/* Chart Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-bold text-white font-serif">
+              Clicks Over Time
             </h3>
-            <button
-              onClick={() => onNavigate("links")}
-              className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-semibold"
-            >
-              View All <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Last 7 days performance
+            </p>
           </div>
 
-          {stats?.topLinks && stats.topLinks.length > 0 ? (
-            <div className="space-y-2">
-              {stats.topLinks.map((link) => (
-                <div
-                  key={link.id}
-                  className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between hover:bg-slate-100/80 transition-all"
-                >
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-bold text-slate-800">{link.product.name}</p>
-                    <p className="text-[11px] font-mono text-indigo-600">/r/{link.shortCode}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs font-bold text-slate-900">{link.totalClicks}</span>
-                    <span className="text-[10px] text-slate-500 block">clicks</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
-              No link clicks recorded yet. Generate your first post in the AI Studio!
-            </div>
-          )}
+          {/* Time range pills */}
+          <div className="inline-flex p-1 rounded-xl bg-[#090d16] border border-slate-800 self-start sm:self-auto">
+            {(["daily", "weekly", "monthly"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setTimeRange(mode)}
+                className={`px-3.5 py-1 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
+                  timeRange === mode
+                    ? "bg-[#161f36] text-white shadow-xs border border-slate-700"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Automation Status */}
-        <div className="lg:col-span-5 p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
-            <Layers className="w-4 h-4 text-indigo-600" />
-            System Automation Status
-          </h3>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/60">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-800">Threads Graph Publisher</p>
-                  <p className="text-[10px] text-slate-500">Auto-reply container chaining</p>
-                </div>
+        {/* SVG Curve Chart */}
+        <div className="relative pt-6 pb-2">
+          {/* Y Axis Grid lines & labels */}
+          <div className="relative h-64 w-full flex flex-col justify-between">
+            {[380, 285, 190, 95, 0].map((val, idx) => (
+              <div key={idx} className="flex items-center gap-4 w-full text-xs text-slate-500 font-mono">
+                <span className="w-8 text-right shrink-0">{val}</span>
+                <div className="flex-1 border-b border-slate-800/40 border-dashed" />
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono font-semibold border border-emerald-200">
-                READY
-              </span>
-            </div>
+            ))}
 
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/60">
-              <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4 text-indigo-600" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-800">BullMQ Scheduler Worker</p>
-                  <p className="text-[10px] text-slate-500">Async delayed job processor</p>
-                </div>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono font-semibold border border-indigo-200">
-                ACTIVE
-              </span>
-            </div>
+            {/* Render Smooth SVG Wave */}
+            <div className="absolute inset-x-0 bottom-0 top-0 pl-12 pr-4 pointer-events-none">
+              <svg
+                viewBox="0 0 700 240"
+                preserveAspectRatio="none"
+                className="w-full h-full overflow-visible"
+              >
+                <defs>
+                  <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.35" />
+                    <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
+                  </linearGradient>
+                  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="glow" />
+                    <feComposite in="SourceGraphic" in2="glow" operator="over" />
+                  </filter>
+                </defs>
 
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/60">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-4 h-4 text-violet-600" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-800">Gemini & OpenAI Fallback</p>
-                  <p className="text-[10px] text-slate-500">Multi-tone soft-selling templates</p>
-                </div>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-mono font-semibold border border-violet-200">
-                ONLINE
-              </span>
+                {/* Area under curve */}
+                <path
+                  d="M 0 230 C 60 220, 80 205, 116 205 C 160 205, 180 195, 233 195 C 280 195, 310 110, 350 110 C 390 110, 430 175, 466 175 C 510 175, 540 25, 583 25 C 630 25, 660 160, 700 160 L 700 240 L 0 240 Z"
+                  fill="url(#chartGradient)"
+                />
+
+                {/* Main Curve Line */}
+                <path
+                  d="M 0 230 C 60 220, 80 205, 116 205 C 160 205, 180 195, 233 195 C 280 195, 310 110, 350 110 C 390 110, 430 175, 466 175 C 510 175, 540 25, 583 25 C 630 25, 660 160, 700 160"
+                  fill="none"
+                  stroke="#6366f1"
+                  strokeWidth="3.5"
+                  filter="url(#glow)"
+                />
+
+                {/* Points on curve */}
+                {[
+                  { cx: 0, cy: 230 },
+                  { cx: 116, cy: 205 },
+                  { cx: 233, cy: 195 },
+                  { cx: 350, cy: 110 },
+                  { cx: 466, cy: 175 },
+                  { cx: 583, cy: 25 },
+                  { cx: 700, cy: 160 },
+                ].map((pt, i) => (
+                  <circle
+                    key={i}
+                    cx={pt.cx}
+                    cy={pt.cy}
+                    r="4.5"
+                    className="fill-indigo-300 stroke-[#0f172a] stroke-2"
+                  />
+                ))}
+              </svg>
             </div>
+          </div>
+
+          {/* X Axis Dates */}
+          <div className="flex justify-between pl-12 pr-4 pt-3 text-xs text-slate-400 font-mono">
+            {chartData.map((d, i) => (
+              <span key={i} className="text-center">
+                {d.date}
+              </span>
+            ))}
           </div>
         </div>
       </div>
