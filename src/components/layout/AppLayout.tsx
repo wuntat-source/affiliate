@@ -6,7 +6,7 @@ import {
   FolderKanban,
   Sparkles,
   History,
-  Send,
+  Users,
   CalendarClock,
   Settings,
   LogOut,
@@ -48,7 +48,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     { id: "resource-manager", label: "Resource Manager", icon: FolderKanban },
     { id: "generate", label: "Generate", icon: Sparkles },
     { id: "history", label: "History", icon: History },
-    { id: "auto-poster", label: "Auto-Poster", icon: Send },
+    { id: "auto-poster", label: "Social Accounts", icon: Users },
     { id: "queue", label: "Queue", icon: CalendarClock },
     { id: "settings", label: "Settings", icon: Settings },
   ];
@@ -159,14 +159,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <header className="px-8 py-5 flex items-center justify-between border-b border-slate-200 bg-white/90 backdrop-blur-md sticky top-0 z-20 shadow-xs">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-slate-900 font-serif capitalize">
-              {currentTab.replace("-", " ")}
+              {currentTab === "auto-poster" ? "Social Accounts" : currentTab.replace("-", " ")}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {currentTab === "dashboard" && "Track clicks, monitor performance, and optimize your affiliate strategy."}
               {currentTab === "resource-manager" && "Manage product catalog, pain points, USPs, and tracked affiliate short links."}
               {currentTab === "generate" && "Transform product data into high-converting organic curhat stories with automated reply links."}
               {currentTab === "history" && "View past posts, telemetry logs, and conversion performance."}
-              {currentTab === "auto-poster" && "Manage connected Threads, Instagram, and social accounts."}
+              {currentTab === "auto-poster" && "Hubungkan dan kelola akun Threads, Instagram, Facebook, dan X untuk auto-posting."}
               {currentTab === "queue" && "Monitor scheduled posts, background queues, and instant publication."}
               {currentTab === "settings" && "Configure AI API keys, Meta developer tokens, and automation settings."}
             </p>

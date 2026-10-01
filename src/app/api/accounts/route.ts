@@ -100,3 +100,32 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
+    }
+
+    try {
+      await prisma.account.delete({
+        where: { id },
+      });
+      return NextResponse.json({ success: true });
+    } catch {
+      const index = mockStore.accounts.findIndex((a) => a.id === id);
+      if (index !== -1) {
+        mockStore.accounts.splice(index, 1);
+      }
+      return NextResponse.json({ success: true });
+    }
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || "Failed to delete account" },
+      { status: 500 }
+    );
+  }
+}

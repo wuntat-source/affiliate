@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   RefreshCw,
   ShieldCheck,
+  Trash2,
+  Radio,
 } from "lucide-react";
 
 interface Account {
@@ -22,6 +24,7 @@ export const AccountsManager: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form states
   const [platform, setPlatform] = useState<string>("THREADS");
@@ -81,6 +84,25 @@ export const AccountsManager: React.FC = () => {
     }
   }
 
+  async function handleDeleteAccount(id: string) {
+    if (!confirm("Apakah kamu yakin ingin memutuskan/menghapus akun sosial ini?")) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/accounts?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        loadAccounts();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -88,10 +110,10 @@ export const AccountsManager: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-600" />
-            Social Media Accounts
+            Social Media Accounts (Threads, IG & Facebook)
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Connect Threads Graph API, Twitter/X API, or use Sandbox simulation mode.
+            Hubungkan akun Threads (Meta Graph API), Instagram, Facebook, atau gunakan Sandbox Mode untuk auto-posting.
           </p>
         </div>
 
@@ -100,7 +122,7 @@ export const AccountsManager: React.FC = () => {
           className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          Connect Social Account
+          + Connect Social Account
         </button>
       </div>
 
@@ -112,10 +134,16 @@ export const AccountsManager: React.FC = () => {
       ) : accounts.length === 0 ? (
         <div className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-white space-y-3">
           <Users className="w-8 h-8 text-slate-300 mx-auto" />
-          <p className="text-xs font-semibold text-slate-800">No social accounts connected</p>
+          <p className="text-xs font-semibold text-slate-800">Belum ada akun sosial media yang terhubung</p>
           <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-            Connect your Threads or Twitter/X account (or use built-in Sandbox mode) to begin automated publishing.
+            Hubungkan akun Threads, Instagram, atau Facebook kamu (atau gunakan mode Sandbox) untuk mulai menjadwalkan auto-posting.
           </p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Tambah Akun Threads / IG Sekarang
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -128,9 +156,19 @@ export const AccountsManager: React.FC = () => {
                 <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-mono font-bold">
                   {acc.platform}
                 </span>
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {acc.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {acc.status}
+                  </span>
+                  <button
+                    onClick={() => handleDeleteAccount(acc.id)}
+                    disabled={deletingId === acc.id}
+                    className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                    title="Putuskan Akun"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -139,7 +177,7 @@ export const AccountsManager: React.FC = () => {
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                <span>Total Posts:</span>
+                <span>Total Posts Terbit:</span>
                 <span className="font-bold text-slate-900">{acc._count?.posts || 0}</span>
               </div>
             </div>
@@ -154,11 +192,11 @@ export const AccountsManager: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-4 h-4 text-indigo-600" />
-                Connect Social Media Account
+                Hubungkan Akun Sosial Media
               </h3>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-xs"
+                className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -167,16 +205,17 @@ export const AccountsManager: React.FC = () => {
             <form onSubmit={handleAddAccount} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Platform
+                  Pilih Platform Sosial Media *
                 </label>
                 <select
                   value={platform}
                   onChange={(e) => setPlatform(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-medium"
                 >
                   <option value="THREADS">Threads (Meta Graph API)</option>
-                  <option value="TWITTER">Twitter / X (API v2)</option>
                   <option value="INSTAGRAM">Instagram</option>
+                  <option value="FACEBOOK">Facebook</option>
+                  <option value="TWITTER">Twitter / X (API v2)</option>
                   <option value="TIKTOK">TikTok</option>
                 </select>
               </div>
@@ -190,14 +229,14 @@ export const AccountsManager: React.FC = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. affiliate_daily_vibes"
+                  placeholder="e.g. affiliate_curhat_daily"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-mono"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Display Name
+                  Nama Tampilan Akun (Display Name)
                 </label>
                 <input
                   type="text"
@@ -218,20 +257,20 @@ export const AccountsManager: React.FC = () => {
                     type="checkbox"
                     checked={isSandbox}
                     onChange={(e) => setIsSandbox(e.target.checked)}
-                    className="rounded text-indigo-600 focus:ring-0"
+                    className="rounded text-indigo-600 focus:ring-0 cursor-pointer"
                   />
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   {isSandbox
-                    ? "Posts will be safely simulated without requiring live Meta API keys."
-                    : "Live mode requires official API Access Token."}
+                    ? "Mode aman: simulasi posting tanpa memerlukan live token developer resmi Meta."
+                    : "Mode live: membutuhkan Meta Graph API Access Token resmi."}
                 </p>
               </div>
 
               {!isSandbox && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    API Access Token
+                    Meta API Access Token
                   </label>
                   <input
                     type="password"
@@ -247,16 +286,16 @@ export const AccountsManager: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
                 >
-                  Cancel
+                  Batal
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
-                  {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Connect Account"}
+                  {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Hubungkan Akun"}
                 </button>
               </div>
             </form>
