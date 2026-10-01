@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: products });
     } catch {
-      // Fallback to mock store
       const filtered = search
         ? mockStore.products.filter(
             (p) =>
@@ -99,6 +98,37 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "Failed to create product" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "Product ID is required" }, { status: 400 });
+    }
+
+    try {
+      await prisma.product.delete({
+        where: { id },
+      });
+      return NextResponse.json({ success: true });
+    } catch {
+      const index = mockStore.products.findIndex((p) => p.id === id);
+      if (index !== -1) {
+        mockStore.products.splice(index, 1);
+        // Also remove associated links
+        mockStore.links = mockStore.links.filter((l) => l.productId !== id);
+      }
+      return NextResponse.json({ success: true });
+    }
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || "Failed to delete product" },
       { status: 500 }
     );
   }

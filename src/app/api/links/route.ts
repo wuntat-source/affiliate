@@ -82,3 +82,32 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "Link ID is required" }, { status: 400 });
+    }
+
+    try {
+      await prisma.affiliateLink.delete({
+        where: { id },
+      });
+      return NextResponse.json({ success: true });
+    } catch {
+      const index = mockStore.links.findIndex((l) => l.id === id);
+      if (index !== -1) {
+        mockStore.links.splice(index, 1);
+      }
+      return NextResponse.json({ success: true });
+    }
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || "Failed to delete affiliate link" },
+      { status: 500 }
+    );
+  }
+}

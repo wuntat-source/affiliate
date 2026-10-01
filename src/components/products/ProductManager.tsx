@@ -8,6 +8,7 @@ import {
   Sparkles,
   Check,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -32,6 +33,7 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form states
   const [name, setName] = useState("");
@@ -100,6 +102,25 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
       console.error(err);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteProduct(id: string) {
+    if (!confirm("Apakah kamu yakin ingin menghapus produk ini beserta link afiliasinya?")) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/products?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        loadProducts();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -173,11 +194,21 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
                   <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
                     {p.category}
                   </span>
-                  {p.price && (
-                    <span className="text-xs font-bold text-slate-900">
-                      {formatCurrency(Number(p.price), p.currency)}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {p.price && (
+                      <span className="text-xs font-bold text-slate-900">
+                        {formatCurrency(Number(p.price), p.currency)}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDeleteProduct(p.id)}
+                      disabled={deletingId === p.id}
+                      className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                      title="Hapus Produk"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <h3 className="text-sm font-bold text-slate-900 line-clamp-1">{p.name}</h3>

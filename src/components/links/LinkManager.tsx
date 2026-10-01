@@ -8,6 +8,7 @@ import {
   Check,
   MousePointerClick,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 
 interface AffiliateLink {
@@ -31,6 +32,7 @@ export const LinkManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form states
   const [productId, setProductId] = useState("");
@@ -101,6 +103,25 @@ export const LinkManager: React.FC = () => {
       console.error(e);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteLink(id: string) {
+    if (!confirm("Apakah kamu yakin ingin menghapus link afiliasi ini?")) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/links?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        loadLinks();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -183,20 +204,30 @@ export const LinkManager: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <button
-                        onClick={() => copyShortLink(l.shortCode, l.id)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        {copiedId === l.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" /> Copy Link
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => copyShortLink(l.shortCode, l.id)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          {copiedId === l.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5" /> Copy Link
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLink(l.id)}
+                          disabled={deletingId === l.id}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                          title="Hapus Link"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
