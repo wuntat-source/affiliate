@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MousePointerClick,
   TrendingUp,
   Users,
   Link as LinkIcon,
+  Sparkles,
 } from "lucide-react";
 import { NavTab } from "../layout/AppLayout";
 
@@ -21,20 +22,36 @@ export const DashboardOverview: React.FC<{ onNavigate: (tab: NavTab) => void }> 
 }) => {
   const [timeRange, setTimeRange] = useState<"daily" | "weekly" | "monthly">("daily");
   const [stats, setStats] = useState<DashboardStats>({
-    totalClicks: 910,
-    clicksToday: 165,
-    activeAccounts: 10,
-    linksGenerated: 237,
+    totalClicks: 0,
+    clicksToday: 0,
+    activeAccounts: 0,
+    linksGenerated: 0,
   });
 
+  useEffect(() => {
+    fetch("/api/analytics")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          setStats({
+            totalClicks: data.data.totalClicks || 0,
+            clicksToday: 0,
+            activeAccounts: data.data.totalAccounts || 0,
+            linksGenerated: data.data.totalLinks || 0,
+          });
+        }
+      })
+      .catch(console.error);
+  }, []);
+
   const chartData = [
-    { date: "15 Mar", value: 12 },
-    { date: "16 Mar", value: 38 },
-    { date: "17 Mar", value: 45 },
-    { date: "18 Mar", value: 190 },
-    { date: "19 Mar", value: 85 },
-    { date: "20 Mar", value: 345 },
-    { date: "21 Mar", value: 110 },
+    { date: "15 Mar", value: 0 },
+    { date: "16 Mar", value: 0 },
+    { date: "17 Mar", value: 0 },
+    { date: "18 Mar", value: 0 },
+    { date: "19 Mar", value: 0 },
+    { date: "20 Mar", value: 0 },
+    { date: "21 Mar", value: 0 },
   ];
 
   return (
@@ -155,63 +172,29 @@ export const DashboardOverview: React.FC<{ onNavigate: (tab: NavTab) => void }> 
 
         {/* SVG Curve Chart */}
         <div className="relative pt-6 pb-2">
-          {/* Y Axis Grid lines & labels */}
-          <div className="relative h-64 w-full flex flex-col justify-between">
-            {[380, 285, 190, 95, 0].map((val, idx) => (
+          <div className="relative h-56 w-full flex flex-col justify-between">
+            {[100, 75, 50, 25, 0].map((val, idx) => (
               <div key={idx} className="flex items-center gap-4 w-full text-xs text-slate-400 font-mono">
                 <span className="w-8 text-right shrink-0">{val}</span>
                 <div className="flex-1 border-b border-slate-100 border-dashed" />
               </div>
             ))}
 
-            {/* Render Smooth SVG Wave */}
-            <div className="absolute inset-x-0 bottom-0 top-0 pl-12 pr-4 pointer-events-none">
-              <svg
-                viewBox="0 0 700 240"
-                preserveAspectRatio="none"
-                className="w-full h-full overflow-visible"
-              >
-                <defs>
-                  <linearGradient id="chartGradientLight" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-
-                {/* Area under curve */}
-                <path
-                  d="M 0 230 C 60 220, 80 205, 116 205 C 160 205, 180 195, 233 195 C 280 195, 310 110, 350 110 C 390 110, 430 175, 466 175 C 510 175, 540 25, 583 25 C 630 25, 660 160, 700 160 L 700 240 L 0 240 Z"
-                  fill="url(#chartGradientLight)"
-                />
-
-                {/* Main Curve Line */}
-                <path
-                  d="M 0 230 C 60 220, 80 205, 116 205 C 160 205, 180 195, 233 195 C 280 195, 310 110, 350 110 C 390 110, 430 175, 466 175 C 510 175, 540 25, 583 25 C 630 25, 660 160, 700 160"
-                  fill="none"
-                  stroke="#4f46e5"
-                  strokeWidth="3.5"
-                />
-
-                {/* Points on curve */}
-                {[
-                  { cx: 0, cy: 230 },
-                  { cx: 116, cy: 205 },
-                  { cx: 233, cy: 195 },
-                  { cx: 350, cy: 110 },
-                  { cx: 466, cy: 175 },
-                  { cx: 583, cy: 25 },
-                  { cx: 700, cy: 160 },
-                ].map((pt, i) => (
-                  <circle
-                    key={i}
-                    cx={pt.cx}
-                    cy={pt.cy}
-                    r="5"
-                    className="fill-white stroke-indigo-600 stroke-[2.5]"
-                  />
-                ))}
-              </svg>
-            </div>
+            {/* Empty state overlay if zero clicks */}
+            {stats.totalClicks === 0 && (
+              <div className="absolute inset-0 pl-12 flex flex-col items-center justify-center bg-white/60 backdrop-blur-2xs">
+                <p className="text-xs font-semibold text-slate-600">Belum ada aktivitas klik</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Tambahkan produk di Resource Manager dan mulai buat postingan di menu Generate!
+                </p>
+                <button
+                  onClick={() => onNavigate("resource-manager")}
+                  className="mt-3 px-3.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold shadow-xs cursor-pointer"
+                >
+                  + Tambah Produk Sekarang
+                </button>
+              </div>
+            )}
           </div>
 
           {/* X Axis Dates */}

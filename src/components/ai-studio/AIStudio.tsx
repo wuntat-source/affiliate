@@ -35,26 +35,18 @@ export const AIStudio: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
 
-  // Input states
+  // Input states - Reset to clean initial values
   const [productName, setProductName] = useState("");
-  const [category, setCategory] = useState("Home & Living");
-  const [painPoints, setPainPoints] = useState(
-    "Sering lupa minum pas kerja di depan laptop sampai pusing dan lemes"
-  );
-  const [usps, setUsps] = useState(
-    "Ada penanda waktu jam, kapasitas besar 2L gak perlu bolak-balik isi ulang"
-  );
-  const [affiliateUrl, setAffiliateUrl] = useState("https://s.shopee.co.id/contohlink123");
+  const [category, setCategory] = useState("General");
+  const [painPoints, setPainPoints] = useState("");
+  const [usps, setUsps] = useState("");
+  const [affiliateUrl, setAffiliateUrl] = useState("");
   const [tone, setTone] = useState<"CASUAL_CURHAT" | "VIRAL_STORY" | "PROBLEM_SOLVER" | "HONEST_REVIEW" | "URGENT_DEAL">("CASUAL_CURHAT");
 
   // Output states
   const [loading, setLoading] = useState(false);
-  const [mainPost, setMainPost] = useState(
-    "Tiap sore kepala suka kliyengan, kukira stres kerjaan, ternyata cuma dehidrasi gara-gara mager bolak-balik ngisi air. Akhirnya naruh botol 2 liter yang ada penanda jamnya di meja kerja. Tiap lirik jam jadi auto kesentil buat minum. Sekarang pusing hilang, target air harian kelar tanpa drama."
-  );
-  const [replyPost, setReplyPost] = useState(
-    "Yang suka lupa minum pas lagi fokus kerja kayak aku, botolnya bisa cek di sini ya 👉 https://s.shopee.co.id/contohlink123"
-  );
+  const [mainPost, setMainPost] = useState("");
+  const [replyPost, setReplyPost] = useState("");
   const [copiedMain, setCopiedMain] = useState(false);
   const [copiedReply, setCopiedReply] = useState(false);
 
@@ -102,8 +94,8 @@ export const AIStudio: React.FC = () => {
     if (found) {
       setProductName(found.name);
       setCategory(found.category || "General");
-      if (found.painPoints) setPainPoints(found.painPoints);
-      if (found.usps) setUsps(found.usps);
+      setPainPoints(found.painPoints || "");
+      setUsps(found.usps || "");
       if (found.affiliateLinks && found.affiliateLinks.length > 0) {
         setAffiliateUrl(`${window.location.origin}/r/${found.affiliateLinks[0].shortCode}`);
       }
@@ -111,6 +103,7 @@ export const AIStudio: React.FC = () => {
   }
 
   async function handleGenerate() {
+    if (!productName) return;
     setLoading(true);
     setQueueSuccessMsg(null);
     try {
@@ -142,6 +135,8 @@ export const AIStudio: React.FC = () => {
   }
 
   async function handleQueuePost(immediate = false) {
+    if (!mainPost) return;
+
     if (!selectedAccountId && accounts.length === 0) {
       try {
         const accRes = await fetch("/api/accounts", {
@@ -197,7 +192,7 @@ export const AIStudio: React.FC = () => {
   }
 
   const mainPostChars = mainPost.length;
-  const isOptimalThreads = mainPostChars <= 350;
+  const isOptimalThreads = mainPostChars > 0 && mainPostChars <= 350;
 
   return (
     <div className="space-y-6">
@@ -240,7 +235,7 @@ export const AIStudio: React.FC = () => {
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Product Name
+                Product Name *
               </label>
               <input
                 type="text"
@@ -272,7 +267,7 @@ export const AIStudio: React.FC = () => {
                   type="text"
                   value={affiliateUrl}
                   onChange={(e) => setAffiliateUrl(e.target.value)}
-                  placeholder="https://..."
+                  placeholder="https://s.shopee.co.id/..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
                 />
               </div>
@@ -299,7 +294,7 @@ export const AIStudio: React.FC = () => {
                 rows={2}
                 value={usps}
                 onChange={(e) => setUsps(e.target.value)}
-                placeholder="e.g. Ada penanda waktu jam, kapasitas besar 2L"
+                placeholder="e.g. Ada penanda waktu jam, kapasitas besar 2L gak bolak-balik"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
               />
             </div>
@@ -359,7 +354,6 @@ export const AIStudio: React.FC = () => {
 
         {/* Right Col: Live Threads Simulator & Dispatch Actions */}
         <div className="lg:col-span-6 space-y-4">
-          {/* Threads Post Simulator Card */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-4 shadow-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -373,7 +367,7 @@ export const AIStudio: React.FC = () => {
                   className={`text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full ${
                     isOptimalThreads
                       ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-amber-50 text-amber-700 border border-amber-200"
+                      : "bg-slate-100 text-slate-600 border border-slate-200"
                   }`}
                 >
                   {mainPostChars} / 350 chars {isOptimalThreads && "✓ Ideal"}
@@ -393,24 +387,27 @@ export const AIStudio: React.FC = () => {
                     <span className="text-[10px] text-slate-400 ml-1.5">just now</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(mainPost);
-                    setCopiedMain(true);
-                    setTimeout(() => setCopiedMain(false), 2000);
-                  }}
-                  className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-all cursor-pointer"
-                  title="Copy main post"
-                >
-                  {copiedMain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
+                {mainPost && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(mainPost);
+                      setCopiedMain(true);
+                      setTimeout(() => setCopiedMain(false), 2000);
+                    }}
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-all cursor-pointer"
+                    title="Copy main post"
+                  >
+                    {copiedMain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                )}
               </div>
 
               <textarea
                 rows={4}
                 value={mainPost}
                 onChange={(e) => setMainPost(e.target.value)}
-                className="w-full bg-transparent text-xs text-slate-800 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
+                placeholder="Hasil postingan utama curhat Threads akan muncul di sini setelah kamu klik tombol Generate..."
+                className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
               />
             </div>
 
@@ -427,24 +424,27 @@ export const AIStudio: React.FC = () => {
                       <span className="text-[10px] text-indigo-500 ml-1.5">Reply #1 (Affiliate Link)</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(replyPost);
-                      setCopiedReply(true);
-                      setTimeout(() => setCopiedReply(false), 2000);
-                    }}
-                    className="p-1.5 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 transition-all cursor-pointer"
-                    title="Copy reply post"
-                  >
-                    {copiedReply ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                  {replyPost && (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(replyPost);
+                        setCopiedReply(true);
+                        setTimeout(() => setCopiedReply(false), 2000);
+                      }}
+                      className="p-1.5 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 transition-all cursor-pointer"
+                      title="Copy reply post"
+                    >
+                      {copiedReply ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
                 </div>
 
                 <textarea
                   rows={2}
                   value={replyPost}
                   onChange={(e) => setReplyPost(e.target.value)}
-                  className="w-full bg-transparent text-xs text-slate-800 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
+                  placeholder="Komentar balasan berisi link afiliasi otomatis akan muncul di sini..."
+                  className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
                 />
               </div>
             </div>
@@ -492,8 +492,8 @@ export const AIStudio: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleQueuePost(false)}
-                  disabled={queueLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-200 transition-all cursor-pointer"
+                  disabled={queueLoading || !mainPost}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-200 transition-all cursor-pointer disabled:opacity-50"
                 >
                   <Calendar className="w-3.5 h-3.5 text-indigo-600" />
                   Add to Post Queue
@@ -501,8 +501,8 @@ export const AIStudio: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleQueuePost(true)}
-                  disabled={queueLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                  disabled={queueLoading || !mainPost}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
                 >
                   <Send className="w-3.5 h-3.5" />
                   Publish Now
