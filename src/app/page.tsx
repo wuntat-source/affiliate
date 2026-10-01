@@ -24,7 +24,7 @@ export default function Home() {
 
   if (isAuthenticated === null) {
     return (
-      <div className="min-h-screen bg-[#090d16] flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="w-6 h-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
       </div>
     );
@@ -50,13 +50,13 @@ export default function Home() {
 
       {currentTab === "resource-manager" && (
         <div className="space-y-6">
-          <div className="flex gap-2 border-b border-slate-800 pb-3">
+          <div className="flex gap-2 border-b border-slate-200 pb-3">
             <button
               onClick={() => setResourceSubTab("products")}
               className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 resourceSubTab === "products"
                   ? "bg-orange-500 text-white shadow-xs"
-                  : "bg-[#0f172a] text-slate-400 hover:text-slate-200 border border-slate-800"
+                  : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200"
               }`}
             >
               Product Catalog
@@ -66,7 +66,7 @@ export default function Home() {
               className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 resourceSubTab === "links"
                   ? "bg-orange-500 text-white shadow-xs"
-                  : "bg-[#0f172a] text-slate-400 hover:text-slate-200 border border-slate-800"
+                  : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200"
               }`}
             >
               Affiliate Links
