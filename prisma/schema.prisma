@@ -1,0 +1,290 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum PlatformType {
+  THREADS
+  TWITTER
+  INSTAGRAM
+  TIKTOK
+  FACEBOOK
+}
+
+enum AccountStatus {
+  ACTIVE
+  EXPIRED
+  RATE_LIMITED
+  DISCONNECTED
+  ERROR
+}
+
+enum AffiliatePlatform {
+  SHOPEE
+  TIKTOK_SHOP
+  TOKOPEDIA
+  LAZADA
+  AMAZON
+  CUSTOM
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  QUEUED
+  PROCESSING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum CampaignType {
+  ONE_TIME
+  RECURRING_CRON
+  INTERVAL_DRIP
+  SMART_SLOT
+}
+
+enum ContentTone {
+  CASUAL_CURHAT
+  VIRAL_STORY
+  PROBLEM_SOLVER
+  HONEST_REVIEW
+  URGENT_DEAL
+  HUMOROUS
+}
+
+model Account {
+  id              String         @id @default(cuid())
+  platform        PlatformType
+  accountName     String
+  username        String
+  avatarUrl       String?
+  accessToken     String         @db.Text
+  refreshToken    String?        @db.Text
+  tokenExpiresAt  DateTime?
+  platformUserId  String?
+  status          AccountStatus  @default(ACTIVE)
+  lastHealthCheck DateTime?
+  errorReason     String?
+  metadata        Json?          @default("{}")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  posts           Post[]
+  campaigns       Campaign[]
+
+  @@unique([platform, username])
+  @@index([platform, status])
+}
+
+model Product {
+  id              String            @id @default(cuid())
+  name            String
+  brand           String?
+  category        String            @default("General")
+  price           Decimal?          @db.Decimal(12, 2)
+  currency        String            @default("IDR")
+  painPoints      String?           @db.Text
+  usps            String?           @db.Text
+  description     String?           @db.Text
+  targetAudience  String?
+  tags            String[]          @default([])
+  metadata        Json?             @default("{}")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  affiliateLinks  AffiliateLink[]
+  mediaAssets     MediaAsset[]
+  aiDrafts        AIContentDraft[]
+  posts           Post[]
+
+  @@index([name, category])
+}
+
+model AffiliateLink {
+  id              String            @id @default(cuid())
+  productId       String
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  platform        AffiliatePlatform @default(SHOPEE)
+  originalUrl     String            @db.Text
+  shortCode       String            @unique
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  totalClicks     Int               @default(0)
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  clicks          LinkClick[]
+  posts           Post[]
+
+  @@index([shortCode])
+  @@index([productId])
+}
+
+model LinkClick {
+  id              String         @id @default(cuid())
+  affiliateLinkId String
+  affiliateLink   AffiliateLink  @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+  ipHash          String?
+  userAgent       String?        @db.Text
+  referer         String?        @db.Text
+  country         String?
+  device          String?
+  clickedAt       DateTime       @default(now())
+
+  @@index([affiliateLinkId, clickedAt])
+}
+
+model AIContentDraft {
+  id              String       @id @default(cuid())
+  productId       String?
+  product         Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  tone            ContentTone  @default(CASUAL_CURHAT)
+  mainPost        String       @db.Text
+  replyPost       String       @db.Text
+  promptUsed      String?      @db.Text
+  characterCount  Int          @default(0)
+  modelName       String       @default("gemini-1.5-flash")
+  isUsed          Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  posts           Post[]
+
+  @@index([productId, tone])
+}
+
+model MediaAsset {
+  id              String       @id @default(cuid())
+  productId       String?
+  product         Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  fileName        String
+  fileUrl         String       @db.Text
+  localPath       String?      @db.Text
+  mimeType        String
+  fileSize        Int
+  caption         String?
+  altText         String?
+  createdAt       DateTime     @default(now())
+
+  posts           PostMedia[]
+
+  @@index([productId])
+}
+
+model Campaign {
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  type            CampaignType  @default(ONE_TIME)
+  cronExpression  String?
+  intervalMinutes Int?
+  timeSlots       String[]      @default([]) // e.g. ["09:00", "12:30", "19:00"]
+  timezone        String        @default("Asia/Jakarta")
+  isActive        Boolean       @default(true)
+  targetTone      ContentTone   @default(CASUAL_CURHAT)
+  maxPostsPerDay  Int           @default(5)
+  jitterMinutes   Int           @default(15) // randomized delay to prevent spam flags
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  accounts        Account[]
+  posts           Post[]
+
+  @@index([isActive, type])
+}
+
+model Post {
+  id               String          @id @default(cuid())
+  accountId        String
+  account          Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  affiliateLinkId  String?
+  affiliateLink    AffiliateLink?  @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  campaignId       String?
+  campaign         Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  aiDraftId        String?
+  aiDraft          AIContentDraft? @relation(fields: [aiDraftId], references: [id], onDelete: SetNull)
+
+  mainContent      String          @db.Text
+  replyContent     String?         @db.Text // Auto first-comment with affiliate link
+  status           PostStatus      @default(DRAFT)
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  retryCount       Int             @default(0)
+  maxRetries       Int             @default(3)
+  lastError        String?         @db.Text
+
+  externalMainId   String?         // ID returned by Threads / X API for main post
+  externalReplyId  String?         // ID returned for reply comment
+  platformPayload  Json?           @default("{}")
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  media            PostMedia[]
+  analytics        PostAnalytics?
+  logs             PostLog[]
+
+  @@index([status, scheduledAt])
+  @@index([accountId, status])
+}
+
+model PostMedia {
+  id           String      @id @default(cuid())
+  postId       String
+  post         Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  mediaAssetId String
+  mediaAsset   MediaAsset  @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  sortOrder    Int         @default(0)
+
+  @@unique([postId, mediaAssetId])
+}
+
+model PostAnalytics {
+  id             String    @id @default(cuid())
+  postId         String    @unique
+  post           Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  impressions    Int       @default(0)
+  likes          Int       @default(0)
+  replies        Int       @default(0)
+  reposts        Int       @default(0)
+  quotes         Int       @default(0)
+  clicks         Int       @default(0)
+  lastSyncedAt   DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model PostLog {
+  id         String    @id @default(cuid())
+  postId     String
+  post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  action     String    // e.g. "QUEUED", "PUBLISHING_MAIN", "PUBLISHING_REPLY", "FAILED", "SUCCESS"
+  message    String    @db.Text
+  details    Json?     @default("{}")
+  createdAt  DateTime  @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text
+  category    String   @default("GENERAL") // GENERAL, AI, SCHEDULER, SOCIAL_API
+  description String?
+  isEncrypted Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@index([key, category])
+}
