@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   Sparkles,
+  Flame,
   History,
   Users,
   CalendarClock,
@@ -12,7 +13,6 @@ import {
   LogOut,
   Sun,
   RotateCw,
-  Flame,
   AlertCircle,
   Layers,
 } from "lucide-react";
@@ -22,6 +22,7 @@ export type NavTab =
   | "dashboard"
   | "resource-manager"
   | "generate"
+  | "viral-replier"
   | "history"
   | "auto-poster"
   | "queue"
@@ -47,6 +48,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "resource-manager", label: "Resource Manager", icon: FolderKanban },
     { id: "generate", label: "Generate", icon: Sparkles },
+    { id: "viral-replier", label: "Viral Replier", icon: Flame, badge: "Viral" },
     { id: "history", label: "History", icon: History },
     { id: "auto-poster", label: "Social Accounts", icon: Users },
     { id: "queue", label: "Queue", icon: CalendarClock },
@@ -107,18 +109,32 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     onTabChange(item.id as NavTab);
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer text-left ${
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer text-left ${
                     isActive
                       ? "bg-orange-50 text-orange-600 border-l-4 border-orange-500 shadow-xs"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
-                  <Icon
-                    className={`w-4 h-4 ${
-                      isActive ? "text-orange-500" : "text-slate-400"
-                    }`}
-                  />
-                  <span>{item.label}</span>
+                  <div className="flex items-center gap-3">
+                    <Icon
+                      className={`w-4 h-4 ${
+                        isActive ? "text-orange-500" : "text-slate-400"
+                      }`}
+                    />
+                    <span>{item.label}</span>
+                  </div>
+
+                  {item.badge && (
+                    <span
+                      className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded font-mono ${
+                        isActive
+                          ? "bg-orange-500 text-white"
+                          : "bg-orange-100 text-orange-700 border border-orange-200"
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -159,12 +175,17 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <header className="px-8 py-5 flex items-center justify-between border-b border-slate-200 bg-white/90 backdrop-blur-md sticky top-0 z-20 shadow-xs">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-slate-900 font-serif capitalize">
-              {currentTab === "auto-poster" ? "Social Accounts" : currentTab.replace("-", " ")}
+              {currentTab === "auto-poster"
+                ? "Social Accounts"
+                : currentTab === "viral-replier"
+                ? "Viral Replier (Popular Posts)"
+                : currentTab.replace("-", " ")}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {currentTab === "dashboard" && "Track clicks, monitor performance, and optimize your affiliate strategy."}
               {currentTab === "resource-manager" && "Manage product catalog, pain points, USPs, and tracked affiliate short links."}
               {currentTab === "generate" && "Transform product data into high-converting organic curhat stories with automated reply links."}
+              {currentTab === "viral-replier" && "Balas postingan Threads / X yang sedang viral dengan komentar bernilai tinggi berisi link afiliasi."}
               {currentTab === "history" && "View past posts, telemetry logs, and conversion performance."}
               {currentTab === "auto-poster" && "Hubungkan dan kelola akun Threads, Instagram, Facebook, dan X untuk auto-posting."}
               {currentTab === "queue" && "Monitor scheduled posts, background queues, and instant publication."}

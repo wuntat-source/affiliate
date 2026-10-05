@@ -10,6 +10,7 @@ import { QueueManager } from "@/components/queue/QueueManager";
 import { AccountsManager } from "@/components/accounts/AccountsManager";
 import { AnalyticsView } from "@/components/analytics/AnalyticsView";
 import { SettingsManager } from "@/components/settings/SettingsManager";
+import { ViralReplier } from "@/components/viral-replier/ViralReplier";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { checkAuth } from "@/lib/auth";
 
@@ -45,6 +46,8 @@ export default function Home() {
       )}
 
       {currentTab === "generate" && <AIStudio />}
+
+      {currentTab === "viral-replier" && <ViralReplier />}
 
       {currentTab === "history" && <AnalyticsView />}
 
