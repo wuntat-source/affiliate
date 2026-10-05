@@ -140,6 +140,91 @@ Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown format
   return generateFallbackContent(req);
 }
 
+export interface ExtractedProductInfo {
+  productName: string;
+  category: string;
+  painPoints: string;
+  usps: string;
+  suggestedTone: "CASUAL_CURHAT" | "VIRAL_STORY" | "PROBLEM_SOLVER" | "HONEST_REVIEW" | "URGENT_DEAL";
+}
+
+export async function extractProductInfo(rawText: string): Promise<ExtractedProductInfo> {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+
+  const systemInstruction = `Kamu adalah pakar riset produk e-commerce & affiliate marketing.
+Tugasmu: Mengekstrak informasi penting dari deskripsi mentah/judul produk Shopee, Tokopedia, atau TikTok Shop menjadi format terstruktur untuk kebutuhan copywriting affiliate Threads/Twitter.
+
+Format Output WAJIB JSON:
+{
+  "productName": "Nama ringkas dan menarik dari produk",
+  "category": "Kategori produk (e.g. Gadget & Tech, Home & Living, Fashion, Health & Beauty, Lifestyle)",
+  "painPoints": "Keresahan/masalah sehari-hari relatable yang dialami orang sebelum pakai produk ini (1-2 kalimat santai)",
+  "usps": "Keunggulan utama & fitur produk yang jadi solusi (1-2 kalimat jelas)",
+  "suggestedTone": "CASUAL_CURHAT"
+}`;
+
+  if (geminiApiKey) {
+    try {
+      const genAI = new GoogleGenerativeAI(geminiApiKey);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        generationConfig: { responseMimeType: "application/json", temperature: 0.7 },
+        systemInstruction,
+      });
+      const result = await model.generateContent(`Deskripsi Mentah Produk:\n"""${rawText}"""`);
+      const parsed = JSON.parse(result.response.text());
+      return {
+        productName: parsed.productName || "Produk Pilihan",
+        category: parsed.category || "General",
+        painPoints: parsed.painPoints || "Sering ribet dengan barang yang kurang praktis",
+        usps: parsed.usps || "Kualitas bagus dan sangat membantu aktivitas harian",
+        suggestedTone: parsed.suggestedTone || "CASUAL_CURHAT",
+      };
+    } catch (e: any) {
+      console.warn("[AI Extract] Gemini extract error:", e.message);
+    }
+  }
+
+  if (openaiApiKey) {
+    try {
+      const openai = new OpenAI({ apiKey: openaiApiKey });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: `Deskripsi Mentah Produk:\n"""${rawText}"""` },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      });
+      const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+      return {
+        productName: parsed.productName || "Produk Pilihan",
+        category: parsed.category || "General",
+        painPoints: parsed.painPoints || "Sering ribet dengan barang yang kurang praktis",
+        usps: parsed.usps || "Kualitas bagus dan sangat membantu aktivitas harian",
+        suggestedTone: parsed.suggestedTone || "CASUAL_CURHAT",
+      };
+    } catch (e: any) {
+      console.warn("[AI Extract] OpenAI extract error:", e.message);
+    }
+  }
+
+  // Fallback Rule-based Local Parser
+  const lines = rawText.split("\n").map(l => l.trim()).filter(Boolean);
+  const firstLine = lines[0] || "Produk Rekomendasi";
+  const title = firstLine.replace(/^(jual|promo|ready|diskon|murah)\s+/i, "").slice(0, 60);
+
+  return {
+    productName: title,
+    category: "General",
+    painPoints: `Sering kerepotan atau butuh solusi praktis untuk kebutuhan harian`,
+    usps: lines.slice(1, 3).join(", ") || "Material berkualitas, awet, dan multifungsi",
+    suggestedTone: "CASUAL_CURHAT",
+  };
+}
+
 function generateFallbackContent(req: AIContentRequest): AIContentResponse {
   const link = req.affiliateUrl || "{link_afiliasi}";
   const pain = req.painPoints || "Sering ngerasa ribet sama rutinitas harian";

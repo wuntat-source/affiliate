@@ -13,6 +13,10 @@ import {
   HelpCircle,
   ShoppingBag,
   Sliders,
+  Wand2,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface Product {
@@ -36,6 +40,9 @@ export const AIStudio: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState<string>("");
 
   // Input states - Reset to clean initial values
+  const [rawDescription, setRawDescription] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [showExtractor, setShowExtractor] = useState(true);
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("General");
   const [painPoints, setPainPoints] = useState("");
@@ -55,6 +62,30 @@ export const AIStudio: React.FC = () => {
   const [scheduleTime, setScheduleTime] = useState<string>("");
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueSuccessMsg, setQueueSuccessMsg] = useState<string | null>(null);
+
+  async function handleAutoExtract() {
+    if (!rawDescription.trim()) return;
+    setExtracting(true);
+    try {
+      const res = await fetch("/api/ai/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: rawDescription }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        if (data.data.productName) setProductName(data.data.productName);
+        if (data.data.category) setCategory(data.data.category);
+        if (data.data.painPoints) setPainPoints(data.data.painPoints);
+        if (data.data.usps) setUsps(data.data.usps);
+        if (data.data.suggestedTone) setTone(data.data.suggestedTone);
+      }
+    } catch (err) {
+      console.error("Extraction error:", err);
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   useEffect(() => {
     fetchProducts();
@@ -229,6 +260,54 @@ export const AIStudio: React.FC = () => {
                   </option>
                 ))}
               </select>
+            )}
+          </div>
+
+          {/* Quick Paste & Auto-Extract from Marketplace / Shopee */}
+          <div className="bg-linear-to-r from-indigo-50/70 via-purple-50/50 to-pink-50/40 border border-indigo-100/90 rounded-xl p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
+                Auto-Extract dari Deskripsi Toko / Shopee
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowExtractor(!showExtractor)}
+                className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+              >
+                {showExtractor ? "Sembunyikan" : "Buka Ekstraktor"}
+                {showExtractor ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+
+            {showExtractor && (
+              <div className="space-y-2 pt-1">
+                <textarea
+                  rows={2}
+                  value={rawDescription}
+                  onChange={(e) => setRawDescription(e.target.value)}
+                  placeholder="Paste judul atau teks deskripsi produk dari Shopee/Tokopedia di sini..."
+                  className="w-full bg-white border border-indigo-200/80 rounded-lg p-2.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-all shadow-2xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleAutoExtract}
+                  disabled={extracting || !rawDescription.trim()}
+                  className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                >
+                  {extracting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Mengekstrak Keresahan & Keunggulan...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      ✨ Ekstrak Otomatis (Nama, Keresahan, & Keunggulan)
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
 

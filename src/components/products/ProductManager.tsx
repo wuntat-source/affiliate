@@ -9,6 +9,7 @@ import {
   Check,
   RefreshCw,
   Trash2,
+  Wand2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -36,6 +37,8 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form states
+  const [rawDesc, setRawDesc] = useState("");
+  const [extracting, setExtracting] = useState(false);
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("Home & Living");
@@ -44,6 +47,29 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
   const [usps, setUsps] = useState("");
   const [affiliateUrl, setAffiliateUrl] = useState("");
   const [saving, setSaving] = useState(false);
+
+  async function handleAutoExtract() {
+    if (!rawDesc.trim()) return;
+    setExtracting(true);
+    try {
+      const res = await fetch("/api/ai/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: rawDesc }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        if (data.data.productName) setName(data.data.productName);
+        if (data.data.category) setCategory(data.data.category);
+        if (data.data.painPoints) setPainPoints(data.data.painPoints);
+        if (data.data.usps) setUsps(data.data.usps);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   useEffect(() => {
     loadProducts();
@@ -264,6 +290,41 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
             </div>
 
             <form onSubmit={handleAddProduct} className="space-y-3">
+              {/* Quick AI Extract from Shopee / Marketplace */}
+              <div className="bg-linear-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
+                    Auto-Extract dari Deskripsi Toko / Shopee
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={rawDesc}
+                  onChange={(e) => setRawDesc(e.target.value)}
+                  placeholder="Paste judul atau teks deskripsi produk dari Shopee/Tokopedia di sini..."
+                  className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 shadow-2xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleAutoExtract}
+                  disabled={extracting || !rawDesc.trim()}
+                  className="w-full py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                >
+                  {extracting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Mengekstrak Info...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      ✨ Ekstrak Otomatis (Nama, Keresahan, Keunggulan)
+                    </>
+                  )}
+                </button>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Product Name *
