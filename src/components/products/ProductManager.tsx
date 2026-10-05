@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Trash2,
   Wand2,
+  AlertCircle,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -47,10 +48,12 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
   const [usps, setUsps] = useState("");
   const [affiliateUrl, setAffiliateUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   async function handleAutoExtract() {
     if (!rawDesc.trim()) return;
     setExtracting(true);
+    setValidationError(null);
     try {
       const res = await fetch("/api/ai/extract", {
         method: "POST",
@@ -91,7 +94,18 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
 
   async function handleAddProduct(e: React.FormEvent) {
     e.preventDefault();
-    if (!name) return;
+    setValidationError(null);
+
+    const missing: string[] = [];
+    if (!name.trim()) missing.push("Nama Produk");
+    if (!painPoints.trim()) missing.push("Keresahan / Pain Points");
+    if (!usps.trim()) missing.push("Keunggulan / USPs");
+    if (!affiliateUrl.trim()) missing.push("Affiliate Link");
+
+    if (missing.length > 0) {
+      setValidationError(`Harap lengkapi isian berikut: ${missing.join(", ")}.`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -390,29 +404,39 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Affiliate Link (Shopee / TikTok Shop URL)
+                  Affiliate Link (Shopee / TikTok Shop URL) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={affiliateUrl}
-                  onChange={(e) => setAffiliateUrl(e.target.value)}
+                  onChange={(e) => {
+                    setAffiliateUrl(e.target.value);
+                    setValidationError(null);
+                  }}
                   placeholder="https://s.shopee.co.id/..."
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500"
                 />
               </div>
 
+              {validationError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 font-medium leading-relaxed">{validationError}</div>
+                </div>
+              )}
+
               <div className="pt-3 flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
                   {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   Save Product

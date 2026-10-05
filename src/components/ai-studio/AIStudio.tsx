@@ -17,6 +17,7 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 
 interface Product {
@@ -63,9 +64,13 @@ export const AIStudio: React.FC = () => {
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueSuccessMsg, setQueueSuccessMsg] = useState<string | null>(null);
 
+  // Validation state
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   async function handleAutoExtract() {
     if (!rawDescription.trim()) return;
     setExtracting(true);
+    setValidationError(null);
     try {
       const res = await fetch("/api/ai/extract", {
         method: "POST",
@@ -121,6 +126,7 @@ export const AIStudio: React.FC = () => {
 
   function handleSelectProduct(id: string) {
     setSelectedProductId(id);
+    setValidationError(null);
     const found = products.find((p) => p.id === id);
     if (found) {
       setProductName(found.name);
@@ -134,9 +140,21 @@ export const AIStudio: React.FC = () => {
   }
 
   async function handleGenerate() {
-    if (!productName) return;
-    setLoading(true);
+    setValidationError(null);
     setQueueSuccessMsg(null);
+
+    const missing: string[] = [];
+    if (!productName.trim()) missing.push("Nama Produk");
+    if (!affiliateUrl.trim()) missing.push("Link Afiliasi");
+    if (!painPoints.trim()) missing.push("Keresahan / Pain Points");
+    if (!usps.trim()) missing.push("Keunggulan / USPs");
+
+    if (missing.length > 0) {
+      setValidationError(`Semua isian wajib diisi sebelum membuat konten! Harap lengkapi: ${missing.join(", ")}.`);
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await fetch("/api/ai/generate", {
         method: "POST",
@@ -160,40 +178,30 @@ export const AIStudio: React.FC = () => {
       }
     } catch (err) {
       console.error("AI Generation error:", err);
+      setValidationError("Terjadi kesalahan saat men-generate postingan AI.");
     } finally {
       setLoading(false);
     }
   }
 
   async function handleQueuePost(immediate = false) {
-    if (!mainPost) return;
+    setValidationError(null);
+    setQueueSuccessMsg(null);
 
-    if (!selectedAccountId && accounts.length === 0) {
-      try {
-        const accRes = await fetch("/api/accounts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            platform: "THREADS",
-            username: "demo_affiliate_creator",
-            accountName: "Demo Creator Account",
-          }),
-        });
-        const accData = await accRes.json();
-        if (accData.success) {
-          setSelectedAccountId(accData.data.id);
-          setAccounts([accData.data]);
-        }
-      } catch (e) {
-        console.error(e);
-      }
+    if (!mainPost.trim() || !replyPost.trim()) {
+      setValidationError("Postingan belum dibuat! Harap lengkapi semua isian formulir di sebelah kiri dan klik tombol 'Generate Threads Curhat' terlebih dahulu.");
+      return;
+    }
+
+    const activeAccId = selectedAccountId || accounts[0]?.id;
+    if (!activeAccId) {
+      setValidationError("Belum ada Akun Sosial yang terhubung! Silakan tambahkan akun Threads Anda di menu 'Social Accounts' terlebih dahulu.");
+      return;
     }
 
     setQueueLoading(true);
-    setQueueSuccessMsg(null);
 
     try {
-      const activeAccId = selectedAccountId || accounts[0]?.id;
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -210,13 +218,16 @@ export const AIStudio: React.FC = () => {
       if (data.success) {
         if (immediate) {
           await fetch(`/api/posts/${data.data.id}/publish`, { method: "POST" });
-          setQueueSuccessMsg("Post published successfully via instant dispatcher!");
+          setQueueSuccessMsg("✅ Postingan berhasil dipublikasikan langsung ke Threads!");
         } else {
-          setQueueSuccessMsg("Post successfully scheduled in Queue!");
+          setQueueSuccessMsg("✅ Postingan berhasil dimasukkan ke jadwal antrean (Queue)!");
         }
+      } else {
+        setValidationError(data.error || "Gagal memproses postingan.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Queue post error:", e);
+      setValidationError("Terjadi kegagalan saat mengirim postingan ke server.");
     } finally {
       setQueueLoading(false);
     }
@@ -340,13 +351,16 @@ export const AIStudio: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Affiliate Link / Short URL
+                  Affiliate Link / Short URL <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={affiliateUrl}
-                  onChange={(e) => setAffiliateUrl(e.target.value)}
-                  placeholder="https://s.shopee.co.id/..."
+                  onChange={(e) => {
+                    setAffiliateUrl(e.target.value);
+                    setValidationError(null);
+                  }}
+                  placeholder="https://s.shopee.co.id/... atau shortlink"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
                 />
               </div>
@@ -354,12 +368,15 @@ export const AIStudio: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Keresahan / Pain Points (Relatable Problem)
+                Keresahan / Pain Points (Relatable Problem) <span className="text-rose-500">*</span>
               </label>
               <textarea
                 rows={2}
                 value={painPoints}
-                onChange={(e) => setPainPoints(e.target.value)}
+                onChange={(e) => {
+                  setPainPoints(e.target.value);
+                  setValidationError(null);
+                }}
                 placeholder="e.g. Sering lupa minum pas kerja sampai pusing/dehidrasi"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
               />
@@ -367,12 +384,15 @@ export const AIStudio: React.FC = () => {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Keunggulan / USPs (Solution)
+                Keunggulan / USPs (Solution) <span className="text-rose-500">*</span>
               </label>
               <textarea
                 rows={2}
                 value={usps}
-                onChange={(e) => setUsps(e.target.value)}
+                onChange={(e) => {
+                  setUsps(e.target.value);
+                  setValidationError(null);
+                }}
                 placeholder="e.g. Ada penanda waktu jam, kapasitas besar 2L gak bolak-balik"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
               />
@@ -412,10 +432,19 @@ export const AIStudio: React.FC = () => {
             </div>
           </div>
 
+          {/* Validation Alert Notification */}
+          {validationError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-fadeIn">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium leading-relaxed">{validationError}</div>
+            </div>
+          )}
+
           <button
+            type="button"
             onClick={handleGenerate}
-            disabled={loading || !productName}
-            className="w-full mt-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 transition-all cursor-pointer"
+            disabled={loading}
+            className="w-full mt-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
           >
             {loading ? (
               <>
@@ -567,11 +596,19 @@ export const AIStudio: React.FC = () => {
                 </div>
               </div>
 
+              {/* Validation Alert Notification on Dispatcher */}
+              {validationError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 font-medium leading-relaxed">{validationError}</div>
+                </div>
+              )}
+
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => handleQueuePost(false)}
-                  disabled={queueLoading || !mainPost}
+                  disabled={queueLoading}
                   className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-200 transition-all cursor-pointer disabled:opacity-50"
                 >
                   <Calendar className="w-3.5 h-3.5 text-indigo-600" />
@@ -580,11 +617,20 @@ export const AIStudio: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleQueuePost(true)}
-                  disabled={queueLoading || !mainPost}
+                  disabled={queueLoading}
                   className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  Publish Now
+                  {queueLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Publishing...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      Publish Now
+                    </>
+                  )}
                 </button>
               </div>
             </div>
