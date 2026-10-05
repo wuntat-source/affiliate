@@ -51,6 +51,8 @@ export async function publishPostToPlatform(payload: PublishPayload): Promise<Pu
   }
 }
 
+import { postMetaEndpoint } from "@/lib/threads/meta-fetch";
+
 /**
  * Threads API Publisher (Official Meta Graph API)
  * Flow:
@@ -72,16 +74,15 @@ async function publishToThreads(payload: PublishPayload): Promise<PublishResult>
       access_token: accessToken,
     });
 
-    const mainContainerRes = await fetch(mainContainerUrl, {
-      method: "POST",
-      body: mainContainerParams,
-    });
-    const mainContainerData = await mainContainerRes.json();
+    const { ok: containerOk, data: mainContainerData } = await postMetaEndpoint(
+      mainContainerUrl,
+      mainContainerParams
+    );
 
-    if (!mainContainerRes.ok || !mainContainerData.id) {
+    if (!containerOk || !mainContainerData?.id) {
       return {
         success: false,
-        error: mainContainerData.error?.message || "Failed to create Threads main post container",
+        error: mainContainerData?.error?.message || "Failed to create Threads main post container",
         details: mainContainerData,
       };
     }
@@ -93,16 +94,12 @@ async function publishToThreads(payload: PublishPayload): Promise<PublishResult>
       access_token: accessToken,
     });
 
-    const publishRes = await fetch(publishUrl, {
-      method: "POST",
-      body: publishParams,
-    });
-    const publishData = await publishRes.json();
+    const { ok: publishOk, data: publishData } = await postMetaEndpoint(publishUrl, publishParams);
 
-    if (!publishRes.ok || !publishData.id) {
+    if (!publishOk || !publishData?.id) {
       return {
         success: false,
-        error: publishData.error?.message || "Failed to publish Threads main post",
+        error: publishData?.error?.message || "Failed to publish Threads main post",
         details: publishData,
       };
     }
@@ -120,26 +117,24 @@ async function publishToThreads(payload: PublishPayload): Promise<PublishResult>
         access_token: accessToken,
       });
 
-      const replyContainerRes = await fetch(mainContainerUrl, {
-        method: "POST",
-        body: replyContainerParams,
-      });
-      const replyContainerData = await replyContainerRes.json();
+      const { ok: replyContainerOk, data: replyContainerData } = await postMetaEndpoint(
+        mainContainerUrl,
+        replyContainerParams
+      );
 
-      if (replyContainerRes.ok && replyContainerData.id) {
+      if (replyContainerOk && replyContainerData?.id) {
         // Publish Reply
         const publishReplyParams = new URLSearchParams({
           creation_id: replyContainerData.id,
           access_token: accessToken,
         });
 
-        const publishReplyRes = await fetch(publishUrl, {
-          method: "POST",
-          body: publishReplyParams,
-        });
-        const publishReplyData = await publishReplyRes.json();
+        const { ok: replyPublishOk, data: publishReplyData } = await postMetaEndpoint(
+          publishUrl,
+          publishReplyParams
+        );
 
-        if (publishReplyRes.ok && publishReplyData.id) {
+        if (replyPublishOk && publishReplyData?.id) {
           publishedReplyId = publishReplyData.id;
         }
       }
