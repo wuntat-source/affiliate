@@ -5,15 +5,13 @@ export async function fetchMetaEndpoint(urlStr: string): Promise<{ ok: boolean; 
     try {
       const url = new URL(urlStr);
       const req = https.request(
+        url,
         {
-          hostname: url.hostname,
-          path: url.pathname + url.search,
           method: "GET",
           headers: {
-            "User-Agent": "AffiliatePost-AI/1.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             Accept: "application/json",
           },
-          family: 4, // Force IPv4
           timeout: 10000,
         },
         (res) => {
@@ -74,17 +72,15 @@ export async function postMetaEndpoint(urlStr: string, params: URLSearchParams):
       const postData = params.toString();
 
       const req = https.request(
+        url,
         {
-          hostname: url.hostname,
-          path: url.pathname,
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
             "Content-Length": Buffer.byteLength(postData),
-            "User-Agent": "AffiliatePost-AI/1.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             Accept: "application/json",
           },
-          family: 4, // Force IPv4
           timeout: 15000,
         },
         (res) => {
