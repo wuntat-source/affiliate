@@ -8,7 +8,9 @@ import {
   RefreshCw,
   ShieldCheck,
   Trash2,
-  Radio,
+  Zap,
+  AlertCircle,
+  Check,
 } from "lucide-react";
 
 interface Account {
@@ -17,7 +19,16 @@ interface Account {
   accountName: string;
   username: string;
   status: "ACTIVE" | "EXPIRED" | "RATE_LIMITED" | "DISCONNECTED";
+  accessToken?: string;
   _count?: { posts: number };
+}
+
+interface TestStatus {
+  id: string;
+  success: boolean;
+  message: string;
+  username?: string;
+  metaUserId?: string;
 }
 
 export const AccountsManager: React.FC = () => {
@@ -25,6 +36,12 @@ export const AccountsManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Testing states
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<TestStatus | null>(null);
+  const [modalTesting, setModalTesting] = useState(false);
+  const [modalTestMsg, setModalTestMsg] = useState<{ success: boolean; text: string } | null>(null);
 
   // Form states
   const [platform, setPlatform] = useState<string>("THREADS");
@@ -52,6 +69,73 @@ export const AccountsManager: React.FC = () => {
     }
   }
 
+  async function handleTestConnection(accId: string) {
+    setTestingId(accId);
+    setTestStatus(null);
+    try {
+      const res = await fetch("/api/accounts/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: accId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestStatus({
+          id: accId,
+          success: true,
+          message: data.message || "Koneksi berhasil diverifikasi!",
+          username: data.username,
+        });
+      } else {
+        setTestStatus({
+          id: accId,
+          success: false,
+          message: data.error || "Gagal menghubungi server Meta Threads.",
+        });
+      }
+    } catch (e: any) {
+      setTestStatus({
+        id: accId,
+        success: false,
+        message: e.message || "Terjadi kesalahan saat menguji koneksi.",
+      });
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  async function handleTestModalToken() {
+    if (!accessToken.trim()) return;
+    setModalTesting(true);
+    setModalTestMsg(null);
+    try {
+      const res = await fetch("/api/accounts/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken, platform }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModalTestMsg({
+          success: true,
+          text: data.message || `Token Valid! Terhubung ke @${data.username || "Threads"}`,
+        });
+      } else {
+        setModalTestMsg({
+          success: false,
+          text: data.error || "Token tidak valid atau izin Threads belum aktif.",
+        });
+      }
+    } catch (e: any) {
+      setModalTestMsg({
+        success: false,
+        text: e.message || "Gagal menguji token.",
+      });
+    } finally {
+      setModalTesting(false);
+    }
+  }
+
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
     if (!username) return;
@@ -75,6 +159,8 @@ export const AccountsManager: React.FC = () => {
         setUsername("");
         setAccountName("");
         setAccessToken("");
+        setIsSandbox(true);
+        setModalTestMsg(null);
         loadAccounts();
       }
     } catch (e) {
@@ -118,7 +204,10 @@ export const AccountsManager: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            setShowAddModal(true);
+            setModalTestMsg(null);
+          }}
           className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
@@ -139,7 +228,10 @@ export const AccountsManager: React.FC = () => {
             Hubungkan akun Threads, Instagram, atau Facebook kamu (atau gunakan mode Sandbox) untuk mulai menjadwalkan auto-posting.
           </p>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setShowAddModal(true);
+              setModalTestMsg(null);
+            }}
             className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Tambah Akun Threads / IG Sekarang
@@ -147,41 +239,78 @@ export const AccountsManager: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {accounts.map((acc) => (
-            <div
-              key={acc.id}
-              className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-300 shadow-xs space-y-4 transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-mono font-bold">
-                  {acc.platform}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> {acc.status}
+          {accounts.map((acc) => {
+            const isSandboxAcc = !acc.accessToken || acc.accessToken === "sandbox_mode_mock_token";
+            const currentTest = testStatus?.id === acc.id ? testStatus : null;
+
+            return (
+              <div
+                key={acc.id}
+                className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-slate-300 shadow-xs space-y-3.5 transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-mono font-bold">
+                    {acc.platform}
                   </span>
-                  <button
-                    onClick={() => handleDeleteAccount(acc.id)}
-                    disabled={deletingId === acc.id}
-                    className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                    title="Putuskan Akun"
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`flex items-center gap-1 text-[11px] font-semibold ${
+                        isSandboxAcc ? "text-amber-600" : "text-emerald-600"
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {isSandboxAcc ? "SANDBOX" : "LIVE ACTIVE"}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteAccount(acc.id)}
+                      disabled={deletingId === acc.id}
+                      className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                      title="Putuskan Akun"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">{acc.accountName}</h3>
+                  <p className="text-xs text-slate-500 font-mono">@{acc.username}</p>
+                </div>
+
+                {/* Test Feedback Banner */}
+                {currentTest && (
+                  <div
+                    className={`p-2.5 rounded-xl text-xs leading-relaxed ${
+                      currentTest.success
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : "bg-rose-50 text-rose-800 border border-rose-200"
+                    }`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {currentTest.message}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => handleTestConnection(acc.id)}
+                    disabled={testingId === acc.id}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    {testingId === acc.id ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    )}
+                    Tes Koneksi
                   </button>
+
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    {acc._count?.posts || 0} posts terbit
+                  </span>
                 </div>
               </div>
-
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">{acc.accountName}</h3>
-                <p className="text-xs text-slate-500 font-mono">@{acc.username}</p>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                <span>Total Posts Terbit:</span>
-                <span className="font-bold text-slate-900">{acc._count?.posts || 0}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -229,7 +358,7 @@ export const AccountsManager: React.FC = () => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. affiliate_curhat_daily"
+                  placeholder="e.g. adminmbalap"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-mono"
                 />
               </div>
@@ -242,7 +371,7 @@ export const AccountsManager: React.FC = () => {
                   type="text"
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="e.g. Curhat Review Harian"
+                  placeholder="e.g. Edogawa Threads Utama"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500"
                 />
               </div>
@@ -263,22 +392,55 @@ export const AccountsManager: React.FC = () => {
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   {isSandbox
                     ? "Mode aman: simulasi posting tanpa memerlukan live token developer resmi Meta."
-                    : "Mode live: membutuhkan Meta Graph API Access Token resmi."}
+                    : "Mode live: posting otomatis langsung ke server resmi Meta Threads menggunakan Access Token."}
                 </p>
               </div>
 
               {!isSandbox && (
-                <div>
+                <div className="space-y-2">
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Meta API Access Token
+                    Meta API Access Token *
                   </label>
-                  <input
-                    type="password"
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    placeholder="EAAX..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      required
+                      type="password"
+                      value={accessToken}
+                      onChange={(e) => setAccessToken(e.target.value)}
+                      placeholder="EAAX..."
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTestModalToken}
+                      disabled={modalTesting || !accessToken.trim()}
+                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs font-semibold flex items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      {modalTesting ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      )}
+                      Tes Token
+                    </button>
+                  </div>
+
+                  {modalTestMsg && (
+                    <div
+                      className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                        modalTestMsg.success
+                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          : "bg-rose-50 text-rose-800 border border-rose-200"
+                      }`}
+                    >
+                      {modalTestMsg.success ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      )}
+                      <span>{modalTestMsg.text}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
