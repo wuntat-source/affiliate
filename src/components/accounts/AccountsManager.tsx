@@ -64,6 +64,33 @@ export const AccountsManager: React.FC = () => {
     loadAccounts();
   }, []);
 
+  // Auto-poll login status every 2.5s while browser is open
+  useEffect(() => {
+    let interval: any;
+    if (browserWindowOpen && browserUsername.trim()) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(
+            `/api/browser-session/status?platform=${browserPlatform}&username=${encodeURIComponent(
+              browserUsername.trim()
+            )}`,
+            { headers: getAuthHeaders() }
+          );
+          const data = await res.json();
+          if (data.loggedIn || data.state === "success") {
+            setBrowserWindowOpen(false);
+            setBrowserFeedback({
+              success: true,
+              msg: data.message || "Sesi login berhasil diverifikasi & akun siap digunakan!",
+            });
+            loadAccounts();
+          }
+        } catch {}
+      }, 2500);
+    }
+    return () => clearInterval(interval);
+  }, [browserWindowOpen, browserUsername, browserPlatform]);
+
   async function handleLaunchBrowserLogin() {
     if (!browserUsername.trim()) {
       setBrowserFeedback({

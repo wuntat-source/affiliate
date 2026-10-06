@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAndSaveSession } from "@/lib/playwright/browser-session";
 import { getUserContext } from "@/lib/server-auth";
 import { mockStore, MockAccount } from "@/lib/mock-store";
 import { nanoid } from "nanoid";
+import path from "path";
+import fs from "fs";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,10 +16,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Username parameter is required" }, { status: 400 });
     }
 
-    const result = await verifyAndSaveSession(platform, username);
+    const safeName = `${platform.toLowerCase()}_${username.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+    const sessionsDir = path.resolve(process.cwd(), ".sessions", safeName);
+    const statusPath = path.join(sessionsDir, "login_status.json");
+    const statePath = path.join(sessionsDir, "storage_state.json");
 
-    if (result.loggedIn) {
-      // Auto-save / link account in store
+    // Read status file written by the auto-login script
+    let loginStatus: any = null;
+    if (fs.existsSync(statusPath)) {
+      try {
+        loginStatus = JSON.parse(fs.readFileSync(statusPath, "utf-8"));
+      } catch {}
+    }
+
+    const hasSession = fs.existsSync(statePath);
+    const isSuccess = loginStatus?.state === "success";
+    const isWaiting = loginStatus?.state === "waiting_login";
+    const isLaunching = loginStatus?.state === "launching";
+
+    // If login succeeded, register account in store
+    if (isSuccess && hasSession) {
       const existing = mockStore.accounts.find(
         (a) => a.platform === platform && a.username.toLowerCase() === username.toLowerCase()
       );
@@ -43,8 +60,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      loggedIn: result.loggedIn,
-      message: result.message,
+      state: loginStatus?.state || (hasSession ? "success" : "not_started"),
+      loggedIn: isSuccess || (hasSession && !isWaiting && !isLaunching),
+      message: loginStatus?.message || (hasSession ? `Sesi @${username} tersedia.` : "Belum ada sesi login."),
     });
   } catch (error: any) {
     console.error("[Browser Status API Error]:", error);
