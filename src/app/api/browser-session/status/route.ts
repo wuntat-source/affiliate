@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserContext } from "@/lib/server-auth";
-import { mockStore, MockAccount } from "@/lib/mock-store";
+import { mockStore, MockAccount, saveStoreToDisk } from "@/lib/mock-store";
 import { nanoid } from "nanoid";
 import path from "path";
 import fs from "fs";
@@ -33,11 +33,15 @@ export async function GET(request: NextRequest) {
     const isSuccess = loginStatus?.state === "success";
     const isWaiting = loginStatus?.state === "waiting_login";
     const isLaunching = loginStatus?.state === "launching";
+    const hasValidSession = hasSession && !isWaiting && !isLaunching;
 
-    // If login succeeded, register account in store
-    if (isSuccess && hasSession) {
+    // If valid session exists on disk, ensure account is active in mockStore
+    if (hasValidSession || isSuccess) {
       const existing = mockStore.accounts.find(
-        (a) => a.platform === platform && a.username.toLowerCase() === username.toLowerCase()
+        (a) =>
+          a.platform === platform &&
+          a.username.toLowerCase() === username.toLowerCase() &&
+          (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
       );
 
       if (!existing) {
@@ -45,7 +49,7 @@ export async function GET(request: NextRequest) {
           id: `acc_browser_${nanoid(6)}`,
           userId: userCtx.userId,
           platform: platform,
-          accountName: `@${username} (Browser Session)`,
+          accountName: `@${username}`,
           username: username,
           accessToken: "browser_session_auth",
           status: "ACTIVE",
@@ -53,15 +57,17 @@ export async function GET(request: NextRequest) {
           createdAt: new Date(),
         };
         mockStore.accounts.unshift(newAcc);
-      } else {
+        saveStoreToDisk();
+      } else if (existing.status !== "ACTIVE") {
         existing.status = "ACTIVE";
+        saveStoreToDisk();
       }
     }
 
     return NextResponse.json({
       success: true,
       state: loginStatus?.state || (hasSession ? "success" : "not_started"),
-      loggedIn: isSuccess || (hasSession && !isWaiting && !isLaunching),
+      loggedIn: isSuccess || hasValidSession,
       message: loginStatus?.message || (hasSession ? `Sesi @${username} tersedia.` : "Belum ada sesi login."),
     });
   } catch (error: any) {

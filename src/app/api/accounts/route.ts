@@ -3,10 +3,68 @@ import { prisma } from "@/lib/prisma";
 import { mockStore, MockAccount, saveStoreToDisk } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
+import fs from "fs";
+import path from "path";
+
+function syncSessionsFromDisk(userId: string, isAdmin: boolean) {
+  try {
+    const sessionsBase = path.resolve(process.cwd(), ".sessions");
+    if (!fs.existsSync(sessionsBase)) return;
+
+    const entries = fs.readdirSync(sessionsBase, { withFileTypes: true });
+    let modified = false;
+
+    for (const entry of entries) {
+      if (entry.isDirectory() && (entry.name.startsWith("threads_") || entry.name.startsWith("twitter_"))) {
+        const statePath = path.join(sessionsBase, entry.name, "storage_state.json");
+        if (fs.existsSync(statePath)) {
+          const parts = entry.name.split("_");
+          const platform = parts[0].toUpperCase();
+          const username = parts.slice(1).join("_");
+
+          const existing = mockStore.accounts.find(
+            (a) =>
+              a.platform === platform &&
+              a.username.toLowerCase() === username.toLowerCase() &&
+              (isAdmin || (a.userId || "usr_admin_kenzie") === userId)
+          );
+
+          if (!existing) {
+            const newAcc: MockAccount = {
+              id: `acc_disk_${nanoid(6)}`,
+              userId: userId,
+              platform: platform,
+              accountName: `@${username}`,
+              username: username,
+              accessToken: "browser_session_auth",
+              status: "ACTIVE",
+              _count: { posts: 0 },
+              createdAt: new Date(),
+            };
+            mockStore.accounts.unshift(newAcc);
+            modified = true;
+          } else if (existing.status !== "ACTIVE") {
+            existing.status = "ACTIVE";
+            modified = true;
+          }
+        }
+      }
+    }
+
+    if (modified) {
+      saveStoreToDisk();
+    }
+  } catch (err) {
+    console.error("[Account Disk Sync Error]:", err);
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
     const userCtx = getUserContext(request);
+
+    // Sync any existing disk sessions
+    syncSessionsFromDisk(userCtx.userId, userCtx.isAdmin);
 
     try {
       const accounts = await prisma.account.findMany({

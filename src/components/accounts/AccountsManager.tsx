@@ -130,9 +130,12 @@ export const AccountsManager: React.FC = () => {
           msg: data.message || "Jendela Chromium terbuka. Silakan login ke Threads di jendela tersebut.",
         });
       } else {
+        if (data.isHeadlessServer) {
+          setShowManualCookie(true);
+        }
         setBrowserFeedback({
           success: false,
-          msg: data.error || data.message || "Gagal membuka jendela browser Chromium.",
+          msg: data.message || data.error || "Gagal membuka jendela browser Chromium.",
         });
       }
     } catch (err: any) {

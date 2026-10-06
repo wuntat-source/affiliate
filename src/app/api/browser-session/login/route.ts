@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserContext } from "@/lib/server-auth";
-import { mockStore, MockAccount } from "@/lib/mock-store";
+import { mockStore, MockAccount, saveStoreToDisk } from "@/lib/mock-store";
 import { nanoid } from "nanoid";
 import { exec } from "child_process";
 import path from "path";
@@ -25,7 +25,10 @@ export async function POST(request: NextRequest) {
 
     // Register account in mock store immediately if not exists
     const existing = mockStore.accounts.find(
-      (a) => a.platform === platform && a.username.toLowerCase() === cleanUsername.toLowerCase()
+      (a) =>
+        a.platform === platform &&
+        a.username.toLowerCase() === cleanUsername.toLowerCase() &&
+        (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
     );
 
     if (!existing) {
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
         id: `acc_browser_${nanoid(6)}`,
         userId: userCtx.userId,
         platform: platform,
-        accountName: `@${cleanUsername} (Browser Session)`,
+        accountName: `@${cleanUsername}`,
         username: cleanUsername,
         accessToken: "browser_session_auth",
         status: "ACTIVE",
@@ -44,21 +47,33 @@ export async function POST(request: NextRequest) {
     } else {
       existing.status = "ACTIVE";
     }
+    saveStoreToDisk();
 
-    // Launch visible cmd window on Windows
-    const cmd = `start "Threads Login - @${cleanUsername}" cmd.exe /c node scripts\\login-browser-auto.mjs ${cleanUsername} ${platform}`;
+    const isWindows = process.platform === "win32";
 
-    exec(cmd, { cwd: process.cwd() }, (error) => {
-      if (error) {
-        console.error("[Browser Login spawn error]:", error);
-      }
-    });
+    if (isWindows) {
+      // Launch visible cmd window on Windows
+      const cmd = `start "Threads Login - @${cleanUsername}" cmd.exe /c node scripts\\login-browser-auto.mjs ${cleanUsername} ${platform}`;
+      exec(cmd, { cwd: process.cwd() }, (error) => {
+        if (error) {
+          console.error("[Browser Login spawn error]:", error);
+        }
+      });
 
-    return NextResponse.json({
-      success: true,
-      username: cleanUsername,
-      message: "Jendela browser sedang dibuka. Silakan login ke Threads di jendela Chrome/Edge yang muncul.",
-    });
+      return NextResponse.json({
+        success: true,
+        username: cleanUsername,
+        message: "Jendela browser Chromium sedang dibuka. Silakan login ke Threads di jendela yang muncul.",
+      });
+    } else {
+      // On Linux / VPS (headless server without DISPLAY)
+      return NextResponse.json({
+        success: false,
+        isHeadlessServer: true,
+        username: cleanUsername,
+        message: "Server VPS Linux berjalan tanpa monitor GUI fisik. Silakan gunakan fitur 'Tempel Cookie sessionid (Metode VPS)' untuk mengaktifkan akun secara instan tanpa perlu browser fisik.",
+      });
+    }
   } catch (error: any) {
     console.error("[Browser Login API Error]:", error);
     return NextResponse.json(
