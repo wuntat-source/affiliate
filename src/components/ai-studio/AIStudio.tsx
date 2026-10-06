@@ -230,11 +230,16 @@ export const AIStudio: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         if (immediate) {
-          await fetch(`/api/posts/${data.data.id}/publish`, {
+          const pubRes = await fetch(`/api/posts/${data.data.id}/publish`, {
             method: "POST",
             headers: getAuthHeaders(),
           });
-          setQueueSuccessMsg("✅ Postingan dan seluruh balasan berantai berhasil dipublikasikan ke Threads!");
+          const pubData = await pubRes.json();
+          if (pubData.success) {
+            setQueueSuccessMsg("✅ Postingan dan seluruh balasan berantai berhasil dipublikasikan ke Threads!");
+          } else {
+            setValidationError(pubData.error || "Gagal mempublikasikan postingan ke Threads. Pastikan sesi browser Threads aktif.");
+          }
         } else {
           setQueueSuccessMsg("✅ Postingan & utas cerita berhasil dimasukkan ke jadwal antrean (Queue)!");
         }

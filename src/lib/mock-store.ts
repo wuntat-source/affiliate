@@ -56,6 +56,8 @@ export interface MockPost {
   status: "DRAFT" | "SCHEDULED" | "QUEUED" | "PROCESSING" | "PUBLISHED" | "FAILED";
   scheduledAt?: Date | null;
   publishedAt?: Date | null;
+  externalMainId?: string;
+  externalReplyId?: string;
   lastError?: string | null;
   createdAt: Date;
 }

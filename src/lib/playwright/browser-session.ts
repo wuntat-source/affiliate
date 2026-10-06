@@ -297,23 +297,31 @@ export async function postThreadViaPlaywright(options: {
 
     const page = await context.newPage();
 
-    await page.goto("https://www.threads.net/", { waitUntil: "domcontentloaded", timeout: 30000 });
+    // Go to threads home
+    await page.goto("https://www.threads.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
 
     // Look for new post composer button or box
     const composerTrigger = page
-      .locator('text="Start a thread"')
+      .locator('text="Utas baru"')
+      .or(page.locator('text="Start a thread"'))
+      .or(page.locator('text="Apa yang baru?"'))
       .or(page.locator('text="Mulai utas..."'))
+      .or(page.locator('svg[aria-label="Buat"]'))
       .or(page.locator('svg[aria-label="Create"]'))
-      .or(page.locator('svg[aria-label="Buat"]'));
+      .or(page.locator('div[role="button"]:has-text("Utas baru")'));
 
     if (await composerTrigger.first().isVisible({ timeout: 5000 }).catch(() => false)) {
       await composerTrigger.first().click();
       await page.waitForTimeout(1000);
     }
 
-    // Type main post with realistic human typing speed
-    const textbox = page.locator('div[role="textbox"]').first();
+    // Find textbox
+    let textbox = page.locator('div[role="textbox"]').first();
+    if (!(await textbox.isVisible().catch(() => false))) {
+      textbox = page.locator('div[contenteditable="true"]').first();
+    }
+
     await textbox.click();
     await textbox.pressSequentially(mainText, { delay: 15 });
     await page.waitForTimeout(1000);
@@ -323,10 +331,12 @@ export async function postThreadViaPlaywright(options: {
       for (const part of replyParts) {
         if (!part.trim()) continue;
 
-        // Click "Add to thread" button if available
+        // Click "Add to thread" / "Tambahkan ke utas"
         const addThreadBtn = page
-          .locator('text="Add to thread"')
-          .or(page.locator('text="Tambahkan ke utas"'))
+          .locator('text="Tambahkan ke utas"')
+          .or(page.locator('text="Add to thread"'))
+          .or(page.locator('text="Tambah utas"'))
+          .or(page.locator('svg[aria-label="Tambahkan ke utas"]'))
           .or(page.locator('svg[aria-label="Add to thread"]'));
 
         if (await addThreadBtn.first().isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -341,12 +351,14 @@ export async function postThreadViaPlaywright(options: {
       }
     }
 
-    // Click Post Button
+    // Click Post / Posting / Kirim button
     const postBtn = page
-      .locator('div[role="button"]:has-text("Post")')
-      .or(page.locator('div[role="button"]:has-text("Posting")'))
+      .locator('div[role="button"]:has-text("Posting")')
+      .or(page.locator('div[role="button"]:has-text("Post")') )
+      .or(page.locator('div[role="button"]:has-text("Kirim")'))
+      .or(page.locator('button:has-text("Posting")'))
       .or(page.locator('button:has-text("Post")'))
-      .or(page.locator('button:has-text("Posting")'));
+      .or(page.locator('button:has-text("Kirim")'));
 
     if (await postBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
       await postBtn.first().click();
@@ -355,7 +367,7 @@ export async function postThreadViaPlaywright(options: {
       await context.storageState({ path: statePath });
     } else {
       await browser.close();
-      return { success: false, error: "Tombol 'Post/Posting' tidak ditemukan di tampilan Threads." };
+      return { success: false, error: "Tombol 'Posting / Kirim / Post' tidak ditemukan di tampilan Threads." };
     }
 
     await browser.close();
