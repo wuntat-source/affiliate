@@ -1,12 +1,26 @@
-import { chromium, BrowserContext, Page } from "playwright";
+import { chromium, Browser, BrowserContext, Page } from "playwright";
 import path from "path";
 import fs from "fs";
 
-// Base directory to store browser profiles & cookies
-const PROFILES_DIR = path.resolve(process.cwd(), "browser-profiles");
+// Base directory to store browser session cookies (.sessions is ignored by Turbopack file scanner)
+const PROFILES_DIR = path.resolve(process.cwd(), ".sessions");
 
 if (!fs.existsSync(PROFILES_DIR)) {
   fs.mkdirSync(PROFILES_DIR, { recursive: true });
+}
+
+export function getProfileDir(platform: string, username: string): string {
+  const safeName = `${platform.toLowerCase()}_${username.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  const dir = path.join(PROFILES_DIR, safeName);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+export function getStateJsonPath(platform: string, username: string): string {
+  const profileDir = getProfileDir(platform, username);
+  return path.join(profileDir, "storage_state.json");
 }
 
 /**
@@ -15,6 +29,7 @@ if (!fs.existsSync(PROFILES_DIR)) {
 const activeLoginSessions: Record<
   string,
   {
+    browser: Browser;
     context: BrowserContext;
     page: Page;
     platform: "THREADS" | "TWITTER";
@@ -24,99 +39,41 @@ const activeLoginSessions: Record<
 > = {};
 
 /**
- * Clean up Chromium Singleton locks and stale lockfiles that cause
- * "Opening in existing browser session" errors on Windows.
- */
-export function cleanProfileLocks(dir: string) {
-  if (!fs.existsSync(dir)) return;
-  const lockNames = [
-    "SingletonLock",
-    "SingletonCookie",
-    "SingletonSocket",
-    "lockfile",
-    "LOCK",
-    "DevToolsActivePort",
-  ];
-
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        cleanProfileLocks(fullPath);
-      } else if (lockNames.includes(entry.name) || entry.name.endsWith(".lock")) {
-        try {
-          fs.unlinkSync(fullPath);
-        } catch {
-          // ignore busy file error if in use
-        }
-      }
-    }
-  } catch {
-    // ignore
-  }
-}
-
-export function getProfilePath(platform: string, username: string): string {
-  const safeName = `${platform.toLowerCase()}_${username.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-  const profileDir = path.join(PROFILES_DIR, safeName);
-  if (!fs.existsSync(profileDir)) {
-    fs.mkdirSync(profileDir, { recursive: true });
-  }
-  return profileDir;
-}
-
-export function getStateJsonPath(platform: string, username: string): string {
-  const profileDir = getProfilePath(platform, username);
-  return path.join(profileDir, "storage_state.json");
-}
-
-const COMMON_CHROME_ARGS = [
-  "--disable-blink-features=AutomationControlled",
-  "--no-first-run",
-  "--no-default-browser-check",
-  "--disable-background-networking",
-  "--disable-background-timer-throttling",
-  "--disable-client-side-phishing-detection",
-  "--disable-default-apps",
-  "--disable-extensions",
-  "--disable-sync",
-  "--disable-translate",
-  "--metrics-recording-only",
-  "--safebrowsing-disable-auto-update",
-  "--start-maximized",
-];
-
-/**
- * Open interactive browser window non-blockingly so the UI responds immediately.
+ * Open interactive browser window on the desktop
  */
 export async function openInteractiveBrowser(
   platform: "THREADS" | "TWITTER",
   username: string
 ): Promise<{ success: boolean; message: string }> {
-  const profilePath = getProfilePath(platform, username);
   const sessionKey = `${platform}_${username}`;
+  const statePath = getStateJsonPath(platform, username);
 
-  // If already open, close old one first
+  // Close any existing open session for this user first
   if (activeLoginSessions[sessionKey]) {
     try {
-      await activeLoginSessions[sessionKey].context.close();
+      await activeLoginSessions[sessionKey].browser.close();
     } catch {}
     delete activeLoginSessions[sessionKey];
   }
 
-  cleanProfileLocks(profilePath);
-
   try {
-    const context = await chromium.launchPersistentContext(profilePath, {
+    const browser = await chromium.launch({
       headless: false,
-      viewport: null, // Full maximized screen
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      args: COMMON_CHROME_ARGS,
+      args: [
+        "--new-window",
+        "--disable-blink-features=AutomationControlled",
+        "--start-maximized",
+      ],
     });
 
-    const page = context.pages()[0] || (await context.newPage());
+    const context = await browser.newContext({
+      viewport: null,
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      storageState: fs.existsSync(statePath) ? statePath : undefined,
+    });
+
+    const page = await context.newPage();
 
     if (platform === "THREADS") {
       await page.goto("https://www.threads.net/login", { waitUntil: "domcontentloaded" });
@@ -125,6 +82,7 @@ export async function openInteractiveBrowser(
     }
 
     activeLoginSessions[sessionKey] = {
+      browser,
       context,
       page,
       platform,
@@ -132,10 +90,8 @@ export async function openInteractiveBrowser(
       startedAt: Date.now(),
     };
 
-    // Listen for close
-    context.on("close", () => {
+    browser.on("disconnected", () => {
       delete activeLoginSessions[sessionKey];
-      cleanProfileLocks(profilePath);
     });
 
     return {
@@ -144,26 +100,24 @@ export async function openInteractiveBrowser(
     };
   } catch (error: any) {
     console.error("[Playwright Launch Error]:", error);
-    cleanProfileLocks(profilePath);
     return {
       success: false,
-      message: error.message || "Gagal meluncurkan browser Chromium.",
+      message: error.message || "Gagal membuka jendela browser Chromium.",
     };
   }
 }
 
 /**
- * Check if the user is currently logged in (either in active open window or stored profile)
+ * Check if the user is currently logged in (in active open window or saved profile)
  */
 export async function verifyAndSaveSession(
   platform: "THREADS" | "TWITTER",
   username: string
 ): Promise<{ loggedIn: boolean; message: string }> {
   const sessionKey = `${platform}_${username}`;
-  const profilePath = getProfilePath(platform, username);
   const statePath = getStateJsonPath(platform, username);
 
-  // 1. Check if an active interactive window is open
+  // 1. Check active open browser window
   const active = activeLoginSessions[sessionKey];
   if (active) {
     try {
@@ -173,17 +127,16 @@ export async function verifyAndSaveSession(
       if (platform === "THREADS") {
         isAuthed =
           !currentUrl.includes("/login") &&
-          (currentUrl.includes("threads.net") || currentUrl.includes("/@"));
+          (currentUrl.includes("threads.net") || currentUrl.includes("/@") || currentUrl.includes("/feed"));
       } else {
         isAuthed = !currentUrl.includes("/login") && (currentUrl.includes("x.com/home") || currentUrl.includes("twitter.com/home"));
       }
 
       if (isAuthed) {
-        // Save storage state snapshot
+        // Save session cookies & state
         await active.context.storageState({ path: statePath });
-        await active.context.close();
+        await active.browser.close();
         delete activeLoginSessions[sessionKey];
-        cleanProfileLocks(profilePath);
 
         return {
           loggedIn: true,
@@ -192,7 +145,7 @@ export async function verifyAndSaveSession(
       } else {
         return {
           loggedIn: false,
-          message: `Browser masih berada di halaman login (${currentUrl}). Selesaikan login di jendela browser Chromium, lalu klik 'Cek Status Login'.`,
+          message: `Browser masih di halaman login. Selesaikan login pada jendela Chromium, lalu klik lagi 'Selesai Login & Simpan Sesi'.`,
         };
       }
     } catch (err: any) {
@@ -200,32 +153,41 @@ export async function verifyAndSaveSession(
     }
   }
 
-  // 2. Check stored profile offline via headless
+  // 2. Check saved storage state file
   return checkLoginStatus(platform, username);
 }
 
 /**
- * Check if the stored profile is authenticated
+ * Check if the stored session is authenticated
  */
 export async function checkLoginStatus(
   platform: "THREADS" | "TWITTER",
   username: string
 ): Promise<{ loggedIn: boolean; message: string }> {
-  const profilePath = getProfilePath(platform, username);
   const statePath = getStateJsonPath(platform, username);
-  cleanProfileLocks(profilePath);
+
+  if (!fs.existsSync(statePath)) {
+    return {
+      loggedIn: false,
+      message: `⚠️ Akun @${username} belum login. Klik 'Buka Browser Login Threads' untuk login.`,
+    };
+  }
 
   try {
-    const context = await chromium.launchPersistentContext(profilePath, {
+    const browser = await chromium.launch({
       headless: true,
-      args: COMMON_CHROME_ARGS,
+      args: ["--disable-blink-features=AutomationControlled"],
     });
 
-    const page = context.pages()[0] || (await context.newPage());
+    const context = await browser.newContext({
+      storageState: statePath,
+    });
+
+    const page = await context.newPage();
     const targetUrl = platform === "THREADS" ? "https://www.threads.net/" : "https://x.com/home";
 
     await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2500);
 
     const currentUrl = page.url();
     let isAuthed = false;
@@ -237,13 +199,10 @@ export async function checkLoginStatus(
     }
 
     if (isAuthed) {
-      try {
-        await context.storageState({ path: statePath });
-      } catch {}
+      await context.storageState({ path: statePath });
     }
 
-    await context.close();
-    cleanProfileLocks(profilePath);
+    await browser.close();
 
     return {
       loggedIn: isAuthed,
@@ -252,7 +211,6 @@ export async function checkLoginStatus(
         : `⚠️ Akun @${username} belum login. Klik 'Buka Browser Login Threads' untuk login.`,
     };
   } catch (err: any) {
-    cleanProfileLocks(profilePath);
     return {
       loggedIn: false,
       message: err.message || "Gagal memverifikasi sesi browser",
@@ -270,17 +228,32 @@ export async function postThreadViaPlaywright(options: {
   headless?: boolean;
 }): Promise<{ success: boolean; error?: string; message?: string }> {
   const { username, mainText, replyParts, headless = true } = options;
-  const profilePath = getProfilePath("THREADS", username);
-  cleanProfileLocks(profilePath);
+  const statePath = getStateJsonPath("THREADS", username);
+
+  if (!fs.existsSync(statePath)) {
+    return {
+      success: false,
+      error: `Sesi login untuk @${username} belum ditemukan. Silakan login terlebih dahulu melalui menu Social Accounts.`,
+    };
+  }
 
   try {
-    const context = await chromium.launchPersistentContext(profilePath, {
+    const browser = await chromium.launch({
       headless,
-      viewport: { width: 1280, height: 800 },
-      args: COMMON_CHROME_ARGS,
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--start-maximized",
+      ],
     });
 
-    const page = context.pages()[0] || (await context.newPage());
+    const context = await browser.newContext({
+      storageState: statePath,
+      viewport: { width: 1280, height: 800 },
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    });
+
+    const page = await context.newPage();
 
     await page.goto("https://www.threads.net/", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
@@ -336,14 +309,14 @@ export async function postThreadViaPlaywright(options: {
     if (await postBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
       await postBtn.first().click();
       await page.waitForTimeout(6000); // Wait for post publication to complete
+      // Save refreshed cookies
+      await context.storageState({ path: statePath });
     } else {
-      await context.close();
-      cleanProfileLocks(profilePath);
+      await browser.close();
       return { success: false, error: "Tombol 'Post/Posting' tidak ditemukan di tampilan Threads." };
     }
 
-    await context.close();
-    cleanProfileLocks(profilePath);
+    await browser.close();
 
     return {
       success: true,
@@ -351,7 +324,6 @@ export async function postThreadViaPlaywright(options: {
     };
   } catch (error: any) {
     console.error("[Playwright Auto-Post Error]:", error);
-    cleanProfileLocks(profilePath);
     return {
       success: false,
       error: error.message || "Gagal mengeksekusi auto-posting Playwright.",
