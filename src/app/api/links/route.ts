@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOrUpdateAffiliateLink } from "@/lib/links/link-service";
 import { mockStore, MockLink } from "@/lib/mock-store";
-import { nanoid } from "nanoid";
+import { getUserContext } from "@/lib/server-auth";
+ import { nanoid } from "nanoid";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const userCtx = getUserContext(request);
+
     try {
       const links = await prisma.affiliateLink.findMany({
         include: {
@@ -17,7 +20,13 @@ export async function GET() {
 
       return NextResponse.json({ success: true, data: links });
     } catch {
-      return NextResponse.json({ success: true, data: mockStore.links });
+      let filtered = mockStore.links;
+      if (!userCtx.isAdmin) {
+        filtered = filtered.filter(
+          (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
+        );
+      }
+      return NextResponse.json({ success: true, data: filtered });
     }
   } catch (error: any) {
     return NextResponse.json(
@@ -30,7 +39,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productId, originalUrl, platform, customSlug, utmSource, utmMedium, utmCampaign } = body;
+    const userCtx = getUserContext(request);
+    const { productId, originalUrl, platform, customSlug, utmSource, utmMedium, utmCampaign, userId } = body;
 
     if (!productId || !originalUrl) {
       return NextResponse.json(
@@ -61,6 +71,7 @@ export async function POST(request: NextRequest) {
 
       const newLink: MockLink = {
         id: `link_${nanoid(6)}`,
+        userId: userId || userCtx.userId,
         productId,
         product: { id: product.id, name: product.name, category: product.category },
         originalUrl,

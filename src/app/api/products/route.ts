@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { mockStore, MockProduct } from "@/lib/mock-store";
+import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("q") || "";
+    const userCtx = getUserContext(request);
 
     try {
       const products = await prisma.product.findMany({
@@ -32,13 +34,20 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: products });
     } catch {
-      const filtered = search
-        ? mockStore.products.filter(
-            (p) =>
-              p.name.toLowerCase().includes(search.toLowerCase()) ||
-              p.category.toLowerCase().includes(search.toLowerCase())
-          )
-        : mockStore.products;
+      let filtered = mockStore.products;
+      if (!userCtx.isAdmin) {
+        filtered = filtered.filter(
+          (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+        );
+      }
+
+      if (search) {
+        filtered = filtered.filter(
+          (p) =>
+            p.name.toLowerCase().includes(search.toLowerCase()) ||
+            p.category.toLowerCase().includes(search.toLowerCase())
+        );
+      }
 
       return NextResponse.json({ success: true, data: filtered });
     }
@@ -53,7 +62,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, brand, category, price, currency, painPoints, usps, description, targetAudience, tags } = body;
+    const userCtx = getUserContext(request);
+    const { name, brand, category, price, currency, painPoints, usps, description, targetAudience, tags, userId } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Product name is required" }, { status: 400 });
@@ -79,6 +89,7 @@ export async function POST(request: NextRequest) {
     } catch {
       const newMockProd: MockProduct = {
         id: `prod_${nanoid(6)}`,
+        userId: userId || userCtx.userId,
         name,
         brand: brand || null,
         category: category || "General",

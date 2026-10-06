@@ -8,13 +8,14 @@ import {
   TrendingUp,
   RefreshCw,
 } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 export const AnalyticsView: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/analytics")
+    fetch("/api/analytics", { headers: getAuthHeaders() })
       .then((res) => res.json())
       .then((res) => {
         if (res.success) setData(res.data);

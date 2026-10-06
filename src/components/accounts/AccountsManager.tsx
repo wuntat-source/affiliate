@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Check,
 } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface Account {
   id: string;
@@ -57,7 +58,7 @@ export const AccountsManager: React.FC = () => {
 
   async function loadAccounts() {
     try {
-      const res = await fetch("/api/accounts");
+      const res = await fetch("/api/accounts", { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success) {
         setAccounts(data.data);
@@ -75,7 +76,7 @@ export const AccountsManager: React.FC = () => {
     try {
       const res = await fetch("/api/accounts/test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ accountId: accId }),
       });
       const data = await res.json();
@@ -111,7 +112,7 @@ export const AccountsManager: React.FC = () => {
     try {
       const res = await fetch("/api/accounts/test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ accessToken, platform }),
       });
       const data = await res.json();
@@ -144,7 +145,7 @@ export const AccountsManager: React.FC = () => {
     try {
       const res = await fetch("/api/accounts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           platform,
           username,
@@ -177,7 +178,10 @@ export const AccountsManager: React.FC = () => {
 
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/accounts?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/accounts?id=${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success) {
         loadAccounts();

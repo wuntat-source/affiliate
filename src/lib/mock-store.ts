@@ -2,6 +2,7 @@
 
 export interface MockProduct {
   id: string;
+  userId?: string;
   name: string;
   brand?: string | null;
   category: string;
@@ -17,6 +18,7 @@ export interface MockProduct {
 
 export interface MockAccount {
   id: string;
+  userId?: string;
   platform: string;
   accountName: string;
   username: string;
@@ -28,6 +30,7 @@ export interface MockAccount {
 
 export interface MockLink {
   id: string;
+  userId?: string;
   productId: string;
   product: { id: string; name: string; category: string };
   originalUrl: string;
@@ -41,6 +44,7 @@ export interface MockLink {
 
 export interface MockPost {
   id: string;
+  userId?: string;
   accountId: string;
   account: { platform: string; username: string };
   productId?: string;

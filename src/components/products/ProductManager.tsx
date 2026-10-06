@@ -13,6 +13,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface Product {
   id: string;
@@ -57,7 +58,7 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
     try {
       const res = await fetch("/api/ai/extract", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ rawText: rawDesc }),
       });
       const data = await res.json();
@@ -80,7 +81,9 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
 
   async function loadProducts() {
     try {
-      const res = await fetch(`/api/products?q=${encodeURIComponent(search)}`);
+      const res = await fetch(`/api/products?q=${encodeURIComponent(search)}`, {
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success) {
         setProducts(data.data);
@@ -111,7 +114,7 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
     try {
       const res = await fetch("/api/products", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           name,
           brand,
@@ -126,7 +129,7 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
       if (data.success && affiliateUrl) {
         await fetch("/api/links", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getAuthHeaders() },
           body: JSON.stringify({
             productId: data.data.id,
             originalUrl: affiliateUrl,
@@ -152,7 +155,10 @@ export const ProductManager: React.FC<{ onGenerateForProduct?: (product: Product
 
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/products?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/products?id=${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success) {
         loadProducts();

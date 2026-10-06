@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { mockStore, MockAccount } from "@/lib/mock-store";
+import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const userCtx = getUserContext(request);
+
     try {
       const accounts = await prisma.account.findMany({
         include: {
@@ -17,7 +20,13 @@ export async function GET() {
 
       return NextResponse.json({ success: true, data: accounts });
     } catch {
-      return NextResponse.json({ success: true, data: mockStore.accounts });
+      let filtered = mockStore.accounts;
+      if (!userCtx.isAdmin) {
+        filtered = filtered.filter(
+          (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId
+        );
+      }
+      return NextResponse.json({ success: true, data: filtered });
     }
   } catch (error: any) {
     return NextResponse.json(
@@ -30,7 +39,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { platform, accountName, username, accessToken, refreshToken, platformUserId } = body;
+    const userCtx = getUserContext(request);
+    const { platform, accountName, username, accessToken, refreshToken, platformUserId, userId } = body;
 
     if (!platform || !username) {
       return NextResponse.json(
@@ -70,7 +80,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: account });
     } catch {
       const existing = mockStore.accounts.find(
-        (a) => a.platform === platform && a.username === username
+        (a) =>
+          a.platform === platform &&
+          a.username === username &&
+          (a.userId || "usr_admin_kenzie") === (userId || userCtx.userId)
       );
 
       if (existing) {
@@ -81,6 +94,7 @@ export async function POST(request: NextRequest) {
 
       const newAccount: MockAccount = {
         id: `acc_${nanoid(6)}`,
+        userId: userId || userCtx.userId,
         platform,
         accountName: accountName || username,
         username,

@@ -51,3 +51,14 @@ export function clearAuthSession(): void {
     localStorage.removeItem(AUTH_USER_KEY);
   }
 }
+
+export function getAuthHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const user = getCurrentUser();
+  if (!user) return {};
+  return {
+    "x-user-id": user.id || "usr_admin_kenzie",
+    "x-user-username": user.username || "kenzieganteng",
+    "x-user-role": user.role || "ADMIN",
+  };
+}

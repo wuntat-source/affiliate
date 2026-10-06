@@ -19,6 +19,7 @@ import {
   Globe,
   Radio,
 } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface Product {
   id: string;
@@ -100,7 +101,7 @@ export const ViralReplier: React.FC = () => {
 
   async function fetchProducts() {
     try {
-      const res = await fetch("/api/products");
+      const res = await fetch("/api/products", { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success && data.data) {
         setProducts(data.data);
@@ -115,7 +116,7 @@ export const ViralReplier: React.FC = () => {
 
   async function fetchAccounts() {
     try {
-      const res = await fetch("/api/accounts");
+      const res = await fetch("/api/accounts", { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success && data.data) {
         setAccounts(data.data);
@@ -131,7 +132,9 @@ export const ViralReplier: React.FC = () => {
   async function fetchTrendingPosts(niche = trendingNiche) {
     setTrendingLoading(true);
     try {
-      const res = await fetch(`/api/viral-reply/discover?niche=${niche}`);
+      const res = await fetch(`/api/viral-reply/discover?niche=${niche}`, {
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success && data.data) {
         setTrendingPosts(data.data);
@@ -183,7 +186,7 @@ export const ViralReplier: React.FC = () => {
     try {
       const res = await fetch("/api/viral-reply/discover", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ url: targetPostUrl }),
       });
       const data = await res.json();
@@ -205,7 +208,7 @@ export const ViralReplier: React.FC = () => {
     try {
       const res = await fetch("/api/viral-reply", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           targetPostUrl,
           targetPostContent,
@@ -237,7 +240,7 @@ export const ViralReplier: React.FC = () => {
       const activeAccId = selectedAccountId || accounts[0]?.id;
       const res = await fetch("/api/posts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           accountId: activeAccId,
           productId: selectedProductId || undefined,
@@ -249,7 +252,10 @@ export const ViralReplier: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         if (isImmediate) {
-          await fetch(`/api/posts/${data.data.id}/publish`, { method: "POST" });
+          await fetch(`/api/posts/${data.data.id}/publish`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+          });
           setSuccessMessage("🚀 Balasan berhasil diposting ke thread populer!");
         } else {
           setSuccessMessage("✅ Balasan berhasil dijadwalkan di antrean!");

@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface AffiliateLink {
   id: string;
@@ -49,7 +50,7 @@ export const LinkManager: React.FC = () => {
 
   async function loadLinks() {
     try {
-      const res = await fetch("/api/links");
+      const res = await fetch("/api/links", { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success) {
         setLinks(data.data);
@@ -63,7 +64,7 @@ export const LinkManager: React.FC = () => {
 
   async function fetchProducts() {
     try {
-      const res = await fetch("/api/products");
+      const res = await fetch("/api/products", { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success) {
         setProducts(data.data);
@@ -82,7 +83,7 @@ export const LinkManager: React.FC = () => {
     try {
       const res = await fetch("/api/links", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           productId,
           originalUrl,
@@ -113,7 +114,10 @@ export const LinkManager: React.FC = () => {
 
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/links?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/links?id=${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success) {
         loadLinks();

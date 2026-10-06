@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { mockStore } from "@/lib/mock-store";
+import { getUserContext } from "@/lib/server-auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const userCtx = getUserContext(request);
+
     try {
       const [
         totalProducts,
@@ -43,16 +46,34 @@ export async function GET() {
         },
       });
     } catch {
-      // Mock store fallback
-      const totalProducts = mockStore.products.length;
-      const totalLinks = mockStore.links.length;
-      const totalPosts = mockStore.posts.length;
-      const publishedPosts = mockStore.posts.filter((p) => p.status === "PUBLISHED").length;
-      const scheduledPosts = mockStore.posts.filter((p) => p.status === "SCHEDULED").length;
-      const failedPosts = mockStore.posts.filter((p) => p.status === "FAILED").length;
-      const totalClicks = mockStore.links.reduce((acc, curr) => acc + curr.totalClicks, 0);
+      // Mock store fallback with user isolation
+      const products = userCtx.isAdmin
+        ? mockStore.products
+        : mockStore.products.filter(
+            (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+          );
 
-      const topLinks = mockStore.links
+      const links = userCtx.isAdmin
+        ? mockStore.links
+        : mockStore.links.filter(
+            (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
+          );
+
+      const posts = userCtx.isAdmin
+        ? mockStore.posts
+        : mockStore.posts.filter(
+            (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+          );
+
+      const totalProducts = products.length;
+      const totalLinks = links.length;
+      const totalPosts = posts.length;
+      const publishedPosts = posts.filter((p) => p.status === "PUBLISHED").length;
+      const scheduledPosts = posts.filter((p) => p.status === "SCHEDULED").length;
+      const failedPosts = posts.filter((p) => p.status === "FAILED").length;
+      const totalClicks = links.reduce((acc, curr) => acc + curr.totalClicks, 0);
+
+      const topLinks = links
         .slice()
         .sort((a, b) => b.totalClicks - a.totalClicks)
         .slice(0, 5);

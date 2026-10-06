@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { NavTab } from "../layout/AppLayout";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface DashboardStats {
   totalClicks: number;
@@ -29,7 +30,7 @@ export const DashboardOverview: React.FC<{ onNavigate: (tab: NavTab) => void }> 
   });
 
   useEffect(() => {
-    fetch("/api/analytics")
+    fetch("/api/analytics", { headers: getAuthHeaders() })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data) {

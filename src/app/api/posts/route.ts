@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { schedulePostJob } from "@/lib/queue/post-queue";
 import { mockStore, MockPost } from "@/lib/mock-store";
+import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const userCtx = getUserContext(request);
 
     try {
       const posts = await prisma.post.findMany({
@@ -24,9 +26,18 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: posts });
     } catch {
-      const filtered = status
-        ? mockStore.posts.filter((p) => p.status === status)
-        : mockStore.posts;
+      let filtered = mockStore.posts;
+
+      // Filter by user if not admin
+      if (!userCtx.isAdmin) {
+        filtered = filtered.filter(
+          (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+        );
+      }
+
+      if (status) {
+        filtered = filtered.filter((p) => p.status === status);
+      }
 
       return NextResponse.json({ success: true, data: filtered });
     }
@@ -41,7 +52,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { accountId, productId, affiliateLinkId, mainContent, replyContent, scheduledAt, aiDraftId } = body;
+    const userCtx = getUserContext(request);
+    const { accountId, productId, affiliateLinkId, mainContent, replyContent, scheduledAt, aiDraftId, userId } = body;
 
     if (!accountId || !mainContent) {
       return NextResponse.json(
@@ -82,6 +94,7 @@ export async function POST(request: NextRequest) {
 
       const newPost: MockPost = {
         id: `post_${nanoid(6)}`,
+        userId: userId || userCtx.userId,
         accountId,
         account: { platform: account.platform, username: account.username },
         productId: productId || undefined,

@@ -9,6 +9,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface PostItem {
   id: string;
@@ -35,7 +36,7 @@ export const QueueManager: React.FC = () => {
   async function loadPosts() {
     try {
       const url = filter === "ALL" ? "/api/posts" : `/api/posts?status=${filter}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success) {
         setPosts(data.data);
@@ -50,7 +51,10 @@ export const QueueManager: React.FC = () => {
   async function handlePublishImmediate(id: string) {
     setPublishingId(id);
     try {
-      const res = await fetch(`/api/posts/${id}/publish`, { method: "POST" });
+      const res = await fetch(`/api/posts/${id}/publish`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       if (data.success) {
         loadPosts();
