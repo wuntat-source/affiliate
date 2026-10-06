@@ -65,24 +65,25 @@ async function run() {
 
   console.log("\n------------------------------------------------------------------");
   console.log(" 👉 SILAKAN LOGIN KE AKUN THREADS ANDA DI JENDELA BROWSER.");
-  console.log(" 👉 Setelah berhasil login dan masuk ke beranda Threads,");
-  console.log("    sistem akan OTOMATIS mendeteksi & menyimpan sesi login Anda.");
-  console.log(" 👉 Atau Anda juga bisa tekan tombol [ENTER] di sini jika sudah masuk.");
+  console.log(" 👉 Masukkan Username/Email & Password Threads Anda.");
+  console.log(" 👉 Setelah berhasil login dan berada di Beranda Threads,");
+  console.log("    KEMBALI KE SINI LALU TEKAN TOMBOL [ENTER] UNTUK MENYIMPAN.");
   console.log("------------------------------------------------------------------\n");
-  console.log(" Menunggu login...");
+  console.log(" Menunggu Anda selesai login... (Tekan [ENTER] setelah login berhasil)");
 
   writeStatus({
     state: "waiting_login",
-    message: `Browser terbuka. Silakan login ke akun @${username} di jendela browser.`,
+    message: `Browser terbuka. Silakan login ke akun @${username} di jendela browser, lalu tekan ENTER di terminal.`,
   });
 
   let loggedIn = false;
   const startTime = Date.now();
-  const TIMEOUT = 10 * 60 * 1000; // 10 minutes
+  const TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
-  // Optional manual Enter listener
+  // Enter listener
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   rl.on("line", () => {
+    console.log("\n⚡ Tombol ENTER ditekan. Memeriksa & menyimpan sesi login...");
     loggedIn = true;
   });
 
@@ -92,12 +93,18 @@ async function run() {
     try {
       if (browser.contexts().length === 0 || context.pages().length === 0) {
         console.log("\n⚠️ Jendela browser ditutup.");
-        writeStatus({ state: "closed", message: "Browser ditutup." });
         break;
       }
 
-      // 1. Check Cookies (sessionid / ds_user_id)
-      const cookies = await context.cookies();
+      // Check Cookies across Meta domains for actual authentication
+      const cookies = await context.cookies([
+        "https://www.threads.net",
+        "https://threads.net",
+        "https://www.threads.com",
+        "https://threads.com",
+        "https://www.instagram.com",
+      ]);
+
       const hasAuthCookie = cookies.some(
         (c) =>
           c.name === "sessionid" ||
@@ -107,59 +114,51 @@ async function run() {
       );
 
       if (hasAuthCookie) {
+        console.log("\n✅ Cookie login Threads/Instagram terdeteksi!");
         loggedIn = true;
         break;
       }
-
-      // 2. Check all open pages URLs
-      for (const p of context.pages()) {
-        const url = p.url();
-        if (platform === "THREADS") {
-          if (
-            (url.includes("threads.net") || url.includes("threads.com")) &&
-            !url.endsWith("/login") &&
-            !url.includes("/login?") &&
-            !url.includes("accounts.google.com")
-          ) {
-            loggedIn = true;
-            break;
-          }
-        } else {
-          if (
-            (url.includes("x.com") || url.includes("twitter.com")) &&
-            !url.includes("/login") &&
-            !url.includes("/flow/")
-          ) {
-            loggedIn = true;
-            break;
-          }
-        }
-      }
-
-      if (loggedIn) break;
     } catch {
       // transient navigation
     }
 
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1500));
   }
 
   try {
     rl.close();
   } catch {}
 
+  // Save session state
   console.log("\n==================================================================");
-  console.log(` ✅ LOGIN BERHASIL TERDETEKSI UNTUK @${username}!`);
   console.log(" Menyimpan cookies & sesi browser...");
   await context.storageState({ path: statePath });
-  console.log(` Sesi tersimpan di: ${statePath}`);
-  console.log(" Akun Anda sudah AKTIF dan siap Auto-Posting!");
-  console.log("==================================================================\n");
 
-  writeStatus({
-    state: "success",
-    message: `Login @${username} berhasil! Sesi tersimpan dan akun siap digunakan.`,
-  });
+  const savedCookies = await context.cookies();
+  const isActuallyAuthed = savedCookies.some(
+    (c) => c.name === "sessionid" || c.name === "ds_user_id" || c.name === "auth_token"
+  );
+
+  if (isActuallyAuthed) {
+    console.log(` ✅ SESI LOGIN @${username} BERHASIL TERSIMPAN!`);
+    console.log(` Lokasi file: ${statePath}`);
+    console.log(" Akun Anda sudah AKTIF dan 100% siap Auto-Posting!");
+    console.log("==================================================================\n");
+
+    writeStatus({
+      state: "success",
+      message: `Login @${username} berhasil! Sesi tersimpan dan akun siap digunakan.`,
+    });
+  } else {
+    console.log(`\n⚠️ Sesi disimpan tetapi cookie login belum terdeteksi.`);
+    console.log(` Pastikan Anda sudah login sampai melihat beranda Threads.`);
+    console.log("==================================================================\n");
+
+    writeStatus({
+      state: "warning",
+      message: `Sesi tersimpan. Pastikan Anda sudah login sebelum memposting.`,
+    });
+  }
 
   await new Promise((r) => setTimeout(r, 2000));
   try {
