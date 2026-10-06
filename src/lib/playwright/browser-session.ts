@@ -271,7 +271,8 @@ export async function postThreadViaPlaywright(options: {
       const textbox = page.locator('div[role="textbox"], div[data-lexical-editor="true"], div[contenteditable="true"]').first();
       await textbox.waitFor({ state: "visible", timeout: 8000 });
       await textbox.click();
-      await textbox.pressSequentially(mainText, { delay: 15 });
+      await page.waitForTimeout(300);
+      await page.keyboard.insertText(mainText);
       await page.waitForTimeout(1000);
 
       const postBtn = page
@@ -321,7 +322,8 @@ export async function postThreadViaPlaywright(options: {
     const textbox = page.locator('div[role="textbox"], div[data-lexical-editor="true"], div[contenteditable="true"]').first();
     await textbox.waitFor({ state: "visible", timeout: 8000 });
     await textbox.click();
-    await textbox.pressSequentially(mainText, { delay: 15 });
+    await page.waitForTimeout(300);
+    await page.keyboard.insertText(mainText);
     await page.waitForTimeout(1000);
 
     // If multi-part replies exist, add chained replies
@@ -343,7 +345,8 @@ export async function postThreadViaPlaywright(options: {
 
         const lastTextbox = page.locator('div[role="textbox"], div[data-lexical-editor="true"], div[contenteditable="true"]').last();
         await lastTextbox.click();
-        await lastTextbox.pressSequentially(part, { delay: 15 });
+        await page.waitForTimeout(300);
+        await page.keyboard.insertText(part);
         await page.waitForTimeout(800);
       }
     }
