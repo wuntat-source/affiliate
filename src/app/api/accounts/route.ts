@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { mockStore, MockAccount, saveStoreToDisk } from "@/lib/mock-store";
+import { mockStore, MockAccount } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 import fs from "fs";
@@ -12,6 +12,7 @@ function syncSessionsFromDisk(userId: string) {
     if (!fs.existsSync(sessionsBase)) return;
 
     const entries = fs.readdirSync(sessionsBase, { withFileTypes: true });
+    const currentAccounts = [...mockStore.accounts];
     let modified = false;
 
     for (const entry of entries) {
@@ -22,14 +23,14 @@ function syncSessionsFromDisk(userId: string) {
           const platform = parts[0].toUpperCase();
           const username = parts.slice(1).join("_");
 
-          const existing = mockStore.accounts.find(
+          const existingIndex = currentAccounts.findIndex(
             (a) =>
               a.platform === platform &&
               a.username.toLowerCase() === username.toLowerCase() &&
               (a.userId || "usr_admin_kenzie") === userId
           );
 
-          if (!existing) {
+          if (existingIndex === -1) {
             const newAcc: MockAccount = {
               id: `acc_disk_${nanoid(6)}`,
               userId: userId,
@@ -39,12 +40,12 @@ function syncSessionsFromDisk(userId: string) {
               accessToken: "browser_session_auth",
               status: "ACTIVE",
               _count: { posts: 0 },
-              createdAt: new Date(),
+              createdAt: new Date().toISOString(),
             };
-            mockStore.accounts.unshift(newAcc);
+            currentAccounts.unshift(newAcc);
             modified = true;
-          } else if (existing.status !== "ACTIVE") {
-            existing.status = "ACTIVE";
+          } else if (currentAccounts[existingIndex].status !== "ACTIVE") {
+            currentAccounts[existingIndex].status = "ACTIVE";
             modified = true;
           }
         }
@@ -52,7 +53,7 @@ function syncSessionsFromDisk(userId: string) {
     }
 
     if (modified) {
-      saveStoreToDisk();
+      mockStore.accounts = currentAccounts;
     }
   } catch (err) {
     console.error("[Account Disk Sync Error]:", err);
@@ -78,10 +79,12 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: accounts });
     } catch {
-      // Admin sees all accounts; Members only see their own
+      const allAccounts = mockStore.accounts;
+
+      // Admin sees all accounts; Members see only their own
       let filtered = userCtx.isAdmin
-        ? mockStore.accounts
-        : mockStore.accounts.filter(
+        ? allAccounts
+        : allAccounts.filter(
             (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId
           );
 
@@ -147,10 +150,11 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: account });
     } catch {
-      const existing = mockStore.accounts.find(
+      const current = [...mockStore.accounts];
+      const existing = current.find(
         (a) =>
           a.platform === platform &&
-          a.username === username &&
+          a.username.toLowerCase() === username.toLowerCase() &&
           (a.userId || "usr_admin_kenzie") === userCtx.userId
       );
 
@@ -158,7 +162,7 @@ export async function POST(request: NextRequest) {
         existing.accountName = accountName || username;
         existing.accessToken = accessToken || "sandbox_token";
         existing.status = "ACTIVE";
-        saveStoreToDisk();
+        mockStore.accounts = current;
         return NextResponse.json({ success: true, data: existing });
       }
 
@@ -171,11 +175,10 @@ export async function POST(request: NextRequest) {
         accessToken: accessToken || "sandbox_token",
         status: "ACTIVE",
         _count: { posts: 0 },
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       };
 
-      mockStore.accounts.unshift(newAccount);
-      saveStoreToDisk();
+      mockStore.accounts = [newAccount, ...current];
       return NextResponse.json({ success: true, data: newAccount });
     }
   } catch (error: any) {
@@ -202,12 +205,13 @@ export async function DELETE(request: NextRequest) {
       });
       return NextResponse.json({ success: true });
     } catch {
-      const index = mockStore.accounts.findIndex(
+      const current = [...mockStore.accounts];
+      const index = current.findIndex(
         (a) => a.id === id && (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
       );
       if (index !== -1) {
-        mockStore.accounts.splice(index, 1);
-        saveStoreToDisk();
+        current.splice(index, 1);
+        mockStore.accounts = current;
       }
       return NextResponse.json({ success: true });
     }

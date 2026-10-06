@@ -125,7 +125,8 @@ export async function POST(request: NextRequest) {
     );
 
     // Register / update account in mockStore
-    const existing = mockStore.accounts.find(
+    const current = [...mockStore.accounts];
+    const existing = current.find(
       (a) =>
         a.platform === platform &&
         a.username.toLowerCase() === cleanUsername.toLowerCase() &&
@@ -142,13 +143,13 @@ export async function POST(request: NextRequest) {
         accessToken: "browser_session_auth",
         status: "ACTIVE",
         _count: { posts: 0 },
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       };
-      mockStore.accounts.unshift(newAcc);
+      mockStore.accounts = [newAcc, ...current];
     } else {
       existing.status = "ACTIVE";
+      mockStore.accounts = current;
     }
-    saveStoreToDisk();
 
     return NextResponse.json({
       success: true,

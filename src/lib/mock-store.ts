@@ -84,7 +84,6 @@ function ensureDirExists() {
   }
 }
 
-// Only real product (LABORÉ Sunscreen with real Shopee affiliate link)
 const DEFAULT_PRODUCTS: MockProduct[] = [
   {
     id: "prod_labore_sunscreen",
@@ -144,12 +143,13 @@ const DEFAULT_ACCOUNTS: MockAccount[] = [
   },
 ];
 
-function loadFromDisk(): {
+export function readStoreFromDisk(): {
   products: MockProduct[];
   accounts: MockAccount[];
   links: MockLink[];
   posts: MockPost[];
   clickLogs: MockClickLog[];
+  users?: any[];
 } {
   ensureDirExists();
   if (fs.existsSync(DB_PATH)) {
@@ -161,11 +161,11 @@ function loadFromDisk(): {
         links: Array.isArray(raw.links) ? raw.links : DEFAULT_LINKS,
         posts: Array.isArray(raw.posts) ? raw.posts : [],
         clickLogs: Array.isArray(raw.clickLogs) ? raw.clickLogs : [],
+        users: raw.users,
       };
     } catch {}
   }
 
-  // Save default data initially
   const initial = {
     products: DEFAULT_PRODUCTS,
     accounts: DEFAULT_ACCOUNTS,
@@ -179,7 +179,13 @@ function loadFromDisk(): {
   return initial;
 }
 
-export function saveStoreToDisk() {
+export function saveStoreToDisk(partial?: {
+  products?: MockProduct[];
+  accounts?: MockAccount[];
+  links?: MockLink[];
+  posts?: MockPost[];
+  clickLogs?: MockClickLog[];
+}) {
   ensureDirExists();
   try {
     let raw: any = {};
@@ -188,11 +194,12 @@ export function saveStoreToDisk() {
         raw = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
       } catch {}
     }
-    raw.products = mockStore.products;
-    raw.accounts = mockStore.accounts;
-    raw.links = mockStore.links;
-    raw.posts = mockStore.posts;
-    raw.clickLogs = mockStore.clickLogs;
+
+    if (partial?.products !== undefined) raw.products = partial.products;
+    if (partial?.accounts !== undefined) raw.accounts = partial.accounts;
+    if (partial?.links !== undefined) raw.links = partial.links;
+    if (partial?.posts !== undefined) raw.posts = partial.posts;
+    if (partial?.clickLogs !== undefined) raw.clickLogs = partial.clickLogs;
 
     fs.writeFileSync(DB_PATH, JSON.stringify(raw, null, 2));
   } catch (e) {
@@ -200,62 +207,39 @@ export function saveStoreToDisk() {
   }
 }
 
-// Global in-memory cache initialized from disk
-const globalStore = globalThis as unknown as {
-  __mockProducts?: MockProduct[];
-  __mockAccounts?: MockAccount[];
-  __mockLinks?: MockLink[];
-  __mockPosts?: MockPost[];
-  __mockClickLogs?: MockClickLog[];
-};
-
-if (!globalStore.__mockProducts) {
-  const diskData = loadFromDisk();
-  globalStore.__mockProducts = diskData.products;
-  globalStore.__mockAccounts = diskData.accounts;
-  globalStore.__mockLinks = diskData.links;
-  globalStore.__mockPosts = diskData.posts;
-  globalStore.__mockClickLogs = diskData.clickLogs;
-}
-
 export const mockStore = {
   get products(): MockProduct[] {
-    return globalStore.__mockProducts || [];
+    return readStoreFromDisk().products;
   },
   set products(val: MockProduct[]) {
-    globalStore.__mockProducts = val;
-    saveStoreToDisk();
+    saveStoreToDisk({ products: val });
   },
 
   get accounts(): MockAccount[] {
-    return globalStore.__mockAccounts || [];
+    return readStoreFromDisk().accounts;
   },
   set accounts(val: MockAccount[]) {
-    globalStore.__mockAccounts = val;
-    saveStoreToDisk();
+    saveStoreToDisk({ accounts: val });
   },
 
   get links(): MockLink[] {
-    return globalStore.__mockLinks || [];
+    return readStoreFromDisk().links;
   },
   set links(val: MockLink[]) {
-    globalStore.__mockLinks = val;
-    saveStoreToDisk();
+    saveStoreToDisk({ links: val });
   },
 
   get posts(): MockPost[] {
-    return globalStore.__mockPosts || [];
+    return readStoreFromDisk().posts;
   },
   set posts(val: MockPost[]) {
-    globalStore.__mockPosts = val;
-    saveStoreToDisk();
+    saveStoreToDisk({ posts: val });
   },
 
   get clickLogs(): MockClickLog[] {
-    return globalStore.__mockClickLogs || [];
+    return readStoreFromDisk().clickLogs;
   },
   set clickLogs(val: MockClickLog[]) {
-    globalStore.__mockClickLogs = val;
-    saveStoreToDisk();
+    saveStoreToDisk({ clickLogs: val });
   },
 };
