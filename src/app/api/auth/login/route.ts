@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SystemUser } from "@/app/api/users/route";
+import { SystemUser, loadUsersFromDisk } from "@/app/api/users/route";
 
 const globalUsers = globalThis as unknown as {
   __systemUsers?: SystemUser[];
@@ -17,24 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const users = globalUsers.__systemUsers || [
-      {
-        id: "usr_admin_kenzie",
-        username: "kenzieganteng",
-        password: "AmeeraKenzie190613",
-        name: "Kenzie Ganteng",
-        role: "ADMIN",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "usr_member_beruang",
-        username: "Beruangmadu",
-        password: "Beruang4321_",
-        name: "Beruang Madu",
-        role: "MEMBER",
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    const users = loadUsersFromDisk();
 
     const matched = users.find(
       (u) =>
