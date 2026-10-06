@@ -337,96 +337,85 @@ export const AIStudio: React.FC = () => {
             )}
           </div>
 
-          {/* Quick Paste & Auto-Extract from Marketplace / Shopee */}
-          <div className="bg-linear-to-r from-indigo-50/70 via-purple-50/50 to-pink-50/40 border border-indigo-100/90 rounded-xl p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
-                Auto-Extract dari Deskripsi Toko / Shopee
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowExtractor(!showExtractor)}
-                className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-              >
-                {showExtractor ? "Sembunyikan" : "Buka Ekstraktor"}
-                {showExtractor ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-
-            {showExtractor && (
-              <div className="space-y-2 pt-1">
-                <textarea
-                  rows={2}
-                  value={rawDescription}
-                  onChange={(e) => setRawDescription(e.target.value)}
-                  placeholder="Paste judul atau teks deskripsi produk dari Shopee/Tokopedia di sini..."
-                  className="w-full bg-white border border-indigo-200/80 rounded-lg p-2.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-all shadow-2xs"
-                />
-                <button
-                  type="button"
-                  onClick={handleAutoExtract}
-                  disabled={extracting || !rawDescription.trim()}
-                  className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
-                >
-                  {extracting ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Mengekstrak Keresahan & Keunggulan...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                      ✨ Ekstrak Otomatis (Nama, Keresahan, & Keunggulan)
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Product Name *
+                Product Name <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 value={productName}
-                onChange={(e) => setProductName(e.target.value)}
+                onChange={(e) => {
+                  setProductName(e.target.value);
+                  setValidationError(null);
+                }}
                 placeholder="e.g. Botol Minum Motivasi 2L"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Category
-                </label>
-                <input
-                  type="text"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="e.g. Health & Fitness"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                />
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Affiliate Link / Short URL <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={affiliateUrl}
+                onChange={(e) => {
+                  setAffiliateUrl(e.target.value);
+                  setValidationError(null);
+                }}
+                placeholder="https://s.shopee.co.id/... atau shortlink"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
+              />
+            </div>
+
+            {/* Quick Paste & Auto-Extract from Marketplace / Shopee */}
+            <div className="bg-linear-to-r from-indigo-50/70 via-purple-50/50 to-pink-50/40 border border-indigo-100/90 rounded-xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                  <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
+                  Auto-Extract dari Deskripsi Toko / Shopee
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowExtractor(!showExtractor)}
+                  className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                >
+                  {showExtractor ? "Sembunyikan" : "Buka Ekstraktor"}
+                  {showExtractor ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Affiliate Link / Short URL <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={affiliateUrl}
-                  onChange={(e) => {
-                    setAffiliateUrl(e.target.value);
-                    setValidationError(null);
-                  }}
-                  placeholder="https://s.shopee.co.id/... atau shortlink"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition-all"
-                />
-              </div>
+
+              {showExtractor && (
+                <div className="space-y-2 pt-1">
+                  <textarea
+                    rows={2}
+                    value={rawDescription}
+                    onChange={(e) => setRawDescription(e.target.value)}
+                    placeholder="Paste judul atau teks deskripsi produk dari Shopee/Tokopedia di sini..."
+                    className="w-full bg-white border border-indigo-200/80 rounded-lg p-2.5 text-xs text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500 transition-all shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAutoExtract}
+                    disabled={extracting || !rawDescription.trim()}
+                    className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                  >
+                    {extracting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Mengekstrak Keresahan & Keunggulan...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                        ✨ Ekstrak Otomatis (Nama, Keresahan, & Keunggulan)
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
