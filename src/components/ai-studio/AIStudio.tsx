@@ -552,7 +552,7 @@ export const AIStudio: React.FC = () => {
                 </div>
 
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={replyPost}
                   onChange={(e) => setReplyPost(e.target.value)}
                   placeholder="Komentar balasan berisi link afiliasi otomatis akan muncul di sini..."

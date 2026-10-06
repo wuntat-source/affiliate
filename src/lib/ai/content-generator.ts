@@ -25,31 +25,32 @@ const TONE_PROMPTS: Record<string, string> = {
 Gaya: Soft-selling curhat Threads santai sehari-hari.
 Sudut pandang: Orang pertama ("aku").
 Struktur:
-1. Awali dengan keresahan/kebiasaan sepele atau momen relatable.
-2. Ceritakan bagaimana produk ini jadi solusi kecil yang bikin hidup lebih gampang.
-3. Maksimal 350 karakter untuk postingan utama.
-4. JANGAN sebut merk secara terang-terangan seperti iklan hard-selling.
-5. Postingan balasan adalah komentar pertama yang menyematkan link affiliate {link_afiliasi} dengan santai (contoh: "banyak yang nanya", "yang mau samaan linknya ini ya").
+1. Postingan Utama: Awali dengan keresahan/kebiasaan sepele atau momen relatable. Ceritakan bagaimana produk ini jadi solusi praktis (maksimal 350 karakter).
+2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Tulis dengan kalimat yang LEBIH PANJANG, LENGKAP, dan BERBOBOT (2-4 kalimat natural). Jelaskan detail tambahan seperti kenapa beli di toko official ini, info bonus/promo gratis ongkir, tips klaim voucher toko, jaminan barang original, serta ajakan klik link ${'{link_afiliasi}'} yang ramah dan solutif.
 `,
   VIRAL_STORY: `
 Gaya: Hook kuat, storytelling cepat, dan emosional/penasaran.
-Maksimal 320 karakter untuk postingan utama.
-Postingan balasan memuat hook penutup dan {link_afiliasi}.
+Struktur:
+1. Postingan Utama: Hook dramatis dan cerita perubahan sebelum vs sesudah (maksimal 350 karakter).
+2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Kalimat panjang dan meyakinkan (2-4 kalimat). Cantumkan spill link official ${'{link_afiliasi}'}, review singkat pengiriman/packing, peringatan agar tidak tergiur produk palsu murah, dan ajakan checkout mumpung stok promo masih ada.
 `,
   PROBLEM_SOLVER: `
-Gaya: Problem-Agitate-Solution singkat. Fokus to-the-point pada solusi praktis.
-Maksimal 300 karakter untuk postingan utama.
-Postingan balasan memuat rekomendasi link {link_afiliasi}.
+Gaya: Problem-Agitate-Solution to-the-point.
+Struktur:
+1. Postingan Utama: Bedah masalah teknis/harian dan solusinya (maksimal 320 karakter).
+2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Rekomendasi mendalam (2-3 kalimat) mengenai alasan memilih varian/produk ini dibanding alternatif lain, garansi kualitas, serta link pembelian resmi ${'{link_afiliasi}'}.
 `,
   HONEST_REVIEW: `
-Gaya: Review jujur setelah pemakaian beberapa minggu. Highlight plus & minus santai.
-Maksimal 350 karakter untuk postingan utama.
-Postingan balasan memuat tempat beli original {link_afiliasi}.
+Gaya: Review jujur setelah pemakaian rutin. Highlight plus & minus santai.
+Struktur:
+1. Postingan Utama: Ulasan objektif hasil pemakaian (maksimal 350 karakter).
+2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Ulasan lanjutan yang informatif (2-4 kalimat) mengenai detail material, toko resmi tempat beli dengan rating bintang 5, tips pemakaian harian, dan link checkout ${'{link_afiliasi}'}.
 `,
   URGENT_DEAL: `
 Gaya: Info diskon/promo kilat tanpa terlihat spammy.
-Maksimal 280 karakter untuk postingan utama.
-Postingan balasan memuat link checkout langsung {link_afiliasi}.
+Struktur:
+1. Postingan Utama: Highlight promo spesial, voucher terbatas, atau bundling menarik (maksimal 300 karakter).
+2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Penjelasan detail promo (2-3 kalimat) mengenai cara dapat gratis ongkir ekstra, batas waktu diskon, dan link checkout langsung ${'{link_afiliasi}'}.
 `,
 };
 
@@ -59,14 +60,18 @@ export async function generateSocialContent(req: AIContentRequest): Promise<AICo
   const affiliateLink = req.affiliateUrl || "{link_afiliasi}";
 
   const systemInstruction = `Kamu adalah copywriter profesional spesialis social media marketing & affiliate conversion untuk platform Threads dan Twitter/X.
-Tugasmu: Menghasilkan konten organik yang natural, sangat menarik, dan berkonversi tinggi tanpa terdengar seperti iklan kaku.
+Tugasmu: Menghasilkan konten organik yang natural, sangat menarik, berkonversi tinggi, dan TIDAK kaku.
+
+ATURAN PENTING:
+1. Postingan utama (post_utama) berisi hook dan cerita/curhat menarik (maksimal 350 karakter).
+2. Postingan balasan (post_balasan) HARUS DIBUAT LEBIH PANJANG (2-4 kalimat lengkap, bukan cuma 1 kalimat pendek). Isinya harus memberikan nilai tambah (alasan beli di toko official, tips klaim diskon/gratis ongkir, review packing/kualitas ori, dan call-to-action natural) yang menyematkan link ${affiliateLink}.
 
 ${toneGuideline}
 
 Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown formatting tambahan:
 {
   "post_utama": "Teks postingan utama",
-  "post_balasan": "Teks komentar balasan dengan link ${affiliateLink}"
+  "post_balasan": "Teks komentar balasan yang panjang dan informatif dengan link ${affiliateLink}"
 }`;
 
   const prompt = `Data Produk:
@@ -227,22 +232,28 @@ Format Output WAJIB JSON:
 
 function generateFallbackContent(req: AIContentRequest): AIContentResponse {
   const link = req.affiliateUrl || "{link_afiliasi}";
-  const pain = req.painPoints || "Sering ngerasa ribet sama rutinitas harian";
-  const usp = req.usps || "bikin semuanya jauh lebih simpel";
+  const pain = req.painPoints || "sering kerepotan dengan urusan harian";
+  const usp = req.usps || "kualitasnya premium dan fungsional banget";
 
   let mainPost = "";
   let replyPost = "";
 
   if (req.tone === "VIRAL_STORY") {
     mainPost = `Kirain hal sepele, ternyata efeknya berasa banget pas nemu ${req.productName}. Awalnya kesel karena ${pain}, tapi pas nyoba yang punya ${usp}, langsung ngerasa terbantu parah. Kenapa gak tau dari dulu ya.`;
-    replyPost = `Buat yang penasaran spill barangnya di mana, ini link officialnya ya 👉 ${link}`;
+    replyPost = `Karena banyak banget yang DM minta spill link toko dan nanyain ori atau enggak: aku checkout langsung di official store yang ini ya. Packingnya rapi dan aman, pengirimannya super cepet, plus dapet bonus lengkap sesuai deskripsi. Jangan lupa klaim voucher diskon toko & gratis ongkirnya sebelum checkout mumpung harganya masih promo 👉 ${link}`;
   } else if (req.tone === "HONEST_REVIEW") {
     mainPost = `Udah pake ${req.productName} sekitar semingguan. Jujur ngebantu banget terutama pas ${pain}. Nilai plusnya karena ${usp}. Buat harian ini worth it sih.`;
-    replyPost = `Belinya di toko yang ini ya, biar dapet yang original 👉 ${link}`;
+    replyPost = `Buat teman-teman yang nanya beli di mana: saran aku pastikan beli di official store yang ini ya biar dapet garansi resmi dan kualitas barangnya 100% original. Kemarin pas aku cek ratingnya bintang 5 dengan ribuan review positif. Link checkout toko resminya aku taro di sini ya 👉 ${link}`;
+  } else if (req.tone === "PROBLEM_SOLVER") {
+    mainPost = `Buat yang sering ngalamin ${pain}, jangan dibiarin berlarut-larut. Solusi paling praktis yang aku temuin sejauh ini ya pakai ${req.productName} ini. Desain dan ${usp} beneran ngerubah rutinitas jadi jauh lebih efisien.`;
+    replyPost = `Solusi buat yang punya kendala serupa, mending langsung ambil yang varian ini biar gak gonta-ganti lagi. Kualitas materialnya tebel dan awet banget untuk pemakaian jangka panjang. Cek ketersediaan stok & promo diskon terbarunya langsung di sini ya 👉 ${link}`;
+  } else if (req.tone === "URGENT_DEAL") {
+    mainPost = `Lagi ada promo kilat buat ${req.productName}! Pas banget buat yang selama ini ngeluh ${pain}. Fitur ${usp} dengan harga segini beneran best deal banget minggu ini.`;
+    replyPost = `Info tambahan: vouchernya lagi aktif dan stok flash salenya terbatas banget hari ini. Yang mau dapetin harga termurah plus ekstra gratis ongkir, langsung amankan sebelum harganya kembali normal di link official ini ya 👉 ${link}`;
   } else {
     // CASUAL_CURHAT (Default Threads Style)
     mainPost = `Jujur baru sadar kalau masalah ${pain} tuh kelar cuma pake ini. Kemarin checkout ${req.productName} gara-gara ${usp}, ditaruh meja langsung ngebantu banget tanpa bikin ribet.`;
-    replyPost = `Yang nanyain link belinya, aku taro di sini ya biar gampang checkout 👉 ${link}`;
+    replyPost = `Banyak banget yang nanya belinya di mana dan dapet bonus apa aja. Ini aku spill link toko official terpercayanya ya, mumpung lagi ada promo gratis ongkir & diskon kilat. Wajib klaim voucher tokonya dulu pas checkout biar makin hemat 👉 ${link}`;
   }
 
   return {

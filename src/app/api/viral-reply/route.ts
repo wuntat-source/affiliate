@@ -40,36 +40,36 @@ export async function POST(request: NextRequest) {
 
     const styleInstructions: Record<string, string> = {
       RELATABLE_CURHAT: `
-Gaya: Komentar santai seolah kita pengguna yang relate banget sama masalah di postingan itu.
+Gaya: Komentar santai seolah kita sesama pengguna yang relate banget sama masalah di postingan itu.
 Sudut pandang: Orang pertama ("aku" / "gue").
-Panjang: Singkat dan padat (maksimal 220 karakter).
-Format: Tanggapi postingannya dulu dengan ramah/relate, lalu spill bahwa ${productName} (${productUsp || "ini"}) ngebantu banget + sertakan link: ${link}.
+Panjang: 2-3 kalimat lengkap dan berbobot.
+Format: Tanggapi postingannya dulu dengan ramah/relate, spill review jujur kenapa ${productName} (${productUsp || "ini"}) beneran ngebantu, info promo/toko official terpercaya, lalu sertakan link: ${link}.
 `,
       HELPFUL_HACK: `
 Gaya: Memberikan tips/lifehack bermanfaat terkait topik, lalu merekomendasikan ${productName} sebagai solusinya.
-Panjang: Maksimal 240 karakter.
-Sertakan link di akhir: ${link}.
+Panjang: 2-3 kalimat lengkap.
+Sertakan tips praktis pemakaian dan link official: ${link}.
 `,
       HUMOROUS_CHILL: `
-Gaya: Santai, sedikit bercanda/meme relatable, tapi solutif.
-Panjang: Maksimal 200 karakter.
-Sertakan link: ${link}.
+Gaya: Santai, sedikit bercanda/meme relatable, tapi solutif dan meyakinkan.
+Panjang: 2-3 kalimat lengkap.
+Sertakan link promo official: ${link}.
 `,
       DIRECT_SPILL: `
-Gaya: Buat yang sering nanya atau butuh solusi cepat.
-Panjang: Maksimal 180 karakter.
-Sertakan link: ${link}.
+Gaya: Informatif, to-the-point, spill detail toko terpercaya & diskon aktif.
+Panjang: 2-3 kalimat lengkap.
+Sertakan link checkout resmi: ${link}.
 `,
     };
 
     const systemPrompt = `Kamu adalah copywriter Threads & Twitter/X spesialis "Viral Thread Commenter / Hijack Reply".
-Tugasmu: Menulis balasan komentar organik ke postingan populer yang sedang viral agar audiens tertarik mengklik link afiliasi tanpa terkesan spam kaku.
+Tugasmu: Menulis balasan komentar organik yang panjang, berbobot, dan meyakinkan ke postingan populer yang sedang viral agar audiens tertarik mengklik link afiliasi tanpa terkesan spam kaku.
 
 ${styleInstructions[style]}
 
 Kembalikan respon HANYA dalam format JSON valid:
 {
-  "reply_text": "Teks komentar balasan",
+  "reply_text": "Teks komentar balasan yang panjang dan bernilai tambah",
   "hook_explanation": "Alasan kenapa komentar ini natural dan berpeluang dapat klik tinggi"
 }`;
 
@@ -137,13 +137,13 @@ Produk Afiliasi yang Dipromosikan:
     // 3. Fallback smart generator template
     if (!generatedReply) {
       if (style === "HELPFUL_HACK") {
-        generatedReply = `Bener banget, kuncinya tuh jangan nunggu burnout baru istirahat. Semenjak pake ${productName} (${productUsp || "ngebantu banget"}), ritme harian jadi jauh lebih teratur. Yang butuh solusinya bisa cek di sini 👉 ${link}`;
+        generatedReply = `Bener banget kak, kuncinya jangan nunggu burnout baru istirahat. Semenjak pake ${productName} (${productUsp || "ngebantu banget"}), ritme harian beneran jadi jauh lebih teratur dan efisien. Kalau ada yang butuh solusinya juga, aku ambil di toko official ini karena lagi promo gratis ongkir 👉 ${link}`;
         hookExplanation = "Memberikan validasi atas masalah yang dibahas sebelum merekomendasikan solusi.";
       } else if (style === "HUMOROUS_CHILL") {
-        generatedReply = `Relate parah 😭 Dulu tiap sore lemes gak karuan, ternyata solusinya cuma modal ${productName} ini di meja. Penyelamat hidup banget: ${link}`;
+        generatedReply = `Relate parah 😭 Dulu tiap sore lemes gak karuan, ternyata solusinya cuma modal naruh ${productName} ini di meja. Penyelamat hidup banget dan kualitasnya awet. Buat yang mau samaan mending langsung checkout di toko officialnya mumpung lagi diskon 👉 ${link}`;
         hookExplanation = "Memakai emoji dan gaya curhat ekspresif yang mengundang interaksi sesama audiens.";
       } else {
-        generatedReply = `Sama banget kak, aku kemarin juga gitu sampai akhirnya nemu ${productName}. Asli nolong banget pas lagi riweuh. Belinya di toko official ini ya: ${link}`;
+        generatedReply = `Sama banget kak, aku kemarin juga sempat ngalamin hal serupa sampai akhirnya nyobain ${productName}. Asli ngebantu banget pas lagi riweuh dan bikin semuanya lebih praktis. Belinya pastikan di toko official yang ini ya biar dapet barang ori dan garansi resmi 👉 ${link}`;
         hookExplanation = "Pendekatan sosial 'sama banget' menciptakan rasa senasib yang meningkatkan CTR.";
       }
     }
