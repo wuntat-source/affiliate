@@ -51,11 +51,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "auto-poster", label: "Social Accounts", icon: Users },
     { id: "resource-manager", label: "Resource Manager", icon: FolderKanban },
     { id: "generate", label: "Generate", icon: Sparkles },
     { id: "viral-replier", label: "Viral Replier", icon: Flame, badge: "Viral" },
     { id: "history", label: "History", icon: History },
-    { id: "auto-poster", label: "Social Accounts", icon: Users },
     { id: "queue", label: "Queue", icon: CalendarClock },
     { id: "settings", label: "Settings", icon: Settings, adminOnly: true },
   ];
