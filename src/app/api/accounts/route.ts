@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import fs from "fs";
 import path from "path";
 
-function syncSessionsFromDisk(userId: string, isAdmin: boolean) {
+function syncSessionsFromDisk(userId: string) {
   try {
     const sessionsBase = path.resolve(process.cwd(), ".sessions");
     if (!fs.existsSync(sessionsBase)) return;
@@ -26,7 +26,7 @@ function syncSessionsFromDisk(userId: string, isAdmin: boolean) {
             (a) =>
               a.platform === platform &&
               a.username.toLowerCase() === username.toLowerCase() &&
-              (isAdmin || (a.userId || "usr_admin_kenzie") === userId)
+              (a.userId || "usr_admin_kenzie") === userId
           );
 
           if (!existing) {
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
   try {
     const userCtx = getUserContext(request);
 
-    // Sync any existing disk sessions
-    syncSessionsFromDisk(userCtx.userId, userCtx.isAdmin);
+    // Sync any existing disk sessions for current user
+    syncSessionsFromDisk(userCtx.userId);
 
     try {
       const accounts = await prisma.account.findMany({
@@ -79,12 +79,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: accounts });
     } catch {
       // Admin sees all accounts; Members only see their own
-      const filtered = userCtx.isAdmin
+      let filtered = userCtx.isAdmin
         ? mockStore.accounts
         : mockStore.accounts.filter(
             (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId
           );
-      return NextResponse.json({ success: true, data: filtered });
+
+      // Deduplicate by platform + username + userId
+      const seen = new Set<string>();
+      const deduped = filtered.filter((acc) => {
+        const key = `${acc.platform}_${acc.username.toLowerCase()}_${acc.userId || "usr_admin_kenzie"}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      return NextResponse.json({ success: true, data: deduped });
     }
   } catch (error: any) {
     return NextResponse.json(
@@ -141,12 +151,13 @@ export async function POST(request: NextRequest) {
         (a) =>
           a.platform === platform &&
           a.username === username &&
-          (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
+          (a.userId || "usr_admin_kenzie") === userCtx.userId
       );
 
       if (existing) {
         existing.accountName = accountName || username;
         existing.accessToken = accessToken || "sandbox_token";
+        existing.status = "ACTIVE";
         saveStoreToDisk();
         return NextResponse.json({ success: true, data: existing });
       }
