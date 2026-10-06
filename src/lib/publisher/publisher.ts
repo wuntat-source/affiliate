@@ -79,10 +79,20 @@ async function publishToThreads(payload: PublishPayload): Promise<PublishResult>
         .filter(Boolean)
     : [];
 
+  let targetPostUrl: string | undefined;
+  let cleanMainText = mainContent;
+
+  const replyMatch = mainContent.match(/^\[Reply to:\s*(https?:\/\/[^\]]+)\]\s*\n?([\s\S]*)/i);
+  if (replyMatch) {
+    targetPostUrl = replyMatch[1].trim();
+    cleanMainText = replyMatch[2].trim();
+  }
+
   const result = await postThreadViaPlaywright({
     username,
-    mainText: mainContent,
+    mainText: cleanMainText,
     replyParts,
+    targetPostUrl,
     headless: true,
   });
 

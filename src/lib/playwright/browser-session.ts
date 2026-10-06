@@ -267,9 +267,10 @@ export async function postThreadViaPlaywright(options: {
   username: string;
   mainText: string;
   replyParts?: string[];
+  targetPostUrl?: string;
   headless?: boolean;
 }): Promise<{ success: boolean; error?: string; message?: string }> {
-  const { username, mainText, replyParts, headless = true } = options;
+  const { username, mainText, replyParts, targetPostUrl, headless = true } = options;
   const statePath = getStateJsonPath("THREADS", username);
 
   if (!fs.existsSync(statePath)) {
@@ -297,7 +298,60 @@ export async function postThreadViaPlaywright(options: {
 
     const page = await context.newPage();
 
-    // Go to threads home
+    // IF TARGET POST URL IS PROVIDED: Post as a comment reply directly to the target thread
+    if (targetPostUrl && targetPostUrl.startsWith("http")) {
+      await page.goto(targetPostUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForTimeout(3000);
+
+      const replyTrigger = page
+        .locator('svg[aria-label="Balas"]')
+        .or(page.locator('svg[aria-label="Reply"]'))
+        .or(page.locator('text="Balas..."'))
+        .or(page.locator('text="Reply..."'))
+        .or(page.locator('text="Komentar"'))
+        .or(page.locator('div[role="textbox"]'));
+
+      if (await replyTrigger.first().isVisible({ timeout: 5000 }).catch(() => false)) {
+        await replyTrigger.first().click();
+        await page.waitForTimeout(1000);
+      }
+
+      let textbox = page.locator('div[role="textbox"]').first();
+      if (!(await textbox.isVisible().catch(() => false))) {
+        textbox = page.locator('div[contenteditable="true"]').first();
+      }
+
+      await textbox.click();
+      await textbox.pressSequentially(mainText, { delay: 15 });
+      await page.waitForTimeout(1000);
+
+      const postBtn = page
+        .locator('div[role="button"]:has-text("Posting")')
+        .or(page.locator('div[role="button"]:has-text("Post")'))
+        .or(page.locator('div[role="button"]:has-text("Kirim")'))
+        .or(page.locator('div[role="button"]:has-text("Balas")'))
+        .or(page.locator('button:has-text("Posting")'))
+        .or(page.locator('button:has-text("Post")'))
+        .or(page.locator('button:has-text("Kirim")'))
+        .or(page.locator('button:has-text("Balas")'));
+
+      if (await postBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
+        await postBtn.first().click();
+        await page.waitForTimeout(5000);
+        await context.storageState({ path: statePath });
+      } else {
+        await browser.close();
+        return { success: false, error: "Tombol posting/kirim balasan tidak ditemukan pada target post." };
+      }
+
+      await browser.close();
+      return {
+        success: true,
+        message: "Berhasil memposting komentar balasan ke target thread!",
+      };
+    }
+
+    // OTHERWISE: Go to threads home and post a new thread
     await page.goto("https://www.threads.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(3000);
 

@@ -238,13 +238,17 @@ export const ViralReplier: React.FC = () => {
 
     try {
       const activeAccId = selectedAccountId || accounts[0]?.id;
+      const contentToPost = targetPostUrl.trim()
+        ? `[Reply to: ${targetPostUrl.trim()}]\n${generatedReply}`
+        : generatedReply;
+
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           accountId: activeAccId,
           productId: selectedProductId || undefined,
-          mainContent: `[Reply to: ${targetPostUrl || "Popular Post"}]\n${generatedReply}`,
+          mainContent: contentToPost,
           scheduledAt: isImmediate ? undefined : scheduleTime || undefined,
         }),
       });
@@ -252,11 +256,16 @@ export const ViralReplier: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         if (isImmediate) {
-          await fetch(`/api/posts/${data.data.id}/publish`, {
+          const pubRes = await fetch(`/api/posts/${data.data.id}/publish`, {
             method: "POST",
             headers: getAuthHeaders(),
           });
-          setSuccessMessage("🚀 Balasan berhasil diposting ke thread populer!");
+          const pubData = await pubRes.json();
+          if (pubData.success) {
+            setSuccessMessage("🚀 Komentar balasan berhasil diposting langsung ke thread populer di Threads!");
+          } else {
+            setSuccessMessage(`⚠️ ${pubData.error || "Gagal memposting balasan ke Threads."}`);
+          }
         } else {
           setSuccessMessage("✅ Balasan berhasil dijadwalkan di antrean!");
         }
