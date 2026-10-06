@@ -319,12 +319,14 @@ export async function postThreadViaPlaywright(options: {
       await page.keyboard.press("Backspace");
       await page.waitForTimeout(1000);
 
-      const postBtn = page
-        .locator('div[role="button"]:has-text("Posting"), div[role="button"]:has-text("Post"), div[role="button"]:has-text("Kirim"), div[role="button"]:has-text("Balas"), button:has-text("Posting"), button:has-text("Post"), button:has-text("Kirim")');
+      const exactReplyBtn = page
+        .locator('div[role="button"], button')
+        .filter({ hasText: /^(\s*Post\s*|\s*Posting\s*|\s*Kirim\s*|\s*Balas\s*|\s*Reply\s*)$/i })
+        .filter({ hasNotText: /option/i });
 
-      if (await postBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-        await postBtn.first().click({ force: true });
-        await page.waitForTimeout(5000);
+      if (await exactReplyBtn.last().isVisible({ timeout: 6000 }).catch(() => false)) {
+        await exactReplyBtn.last().click({ timeout: 6000 });
+        await page.waitForTimeout(6000);
         await context.storageState({ path: statePath });
       } else {
         await browser.close();
@@ -419,12 +421,14 @@ export async function postThreadViaPlaywright(options: {
       }
     }
 
-    // Click Post / Posting / Kirim button
-    const postBtn = page
-      .locator('div[role="button"]:has-text("Posting"), div[role="button"]:has-text("Post"), div[role="button"]:has-text("Kirim"), button:has-text("Posting"), button:has-text("Post"), button:has-text("Kirim")');
+    // Click exact Post / Posting / Kirim button
+    const exactPostBtn = page
+      .locator('div[role="button"], button')
+      .filter({ hasText: /^(\s*Post\s*|\s*Posting\s*|\s*Kirim\s*)$/i })
+      .filter({ hasNotText: /option/i });
 
-    if (await postBtn.first().isVisible({ timeout: 6000 }).catch(() => false)) {
-      await postBtn.first().click({ timeout: 6000, force: true });
+    if (await exactPostBtn.last().isVisible({ timeout: 6000 }).catch(() => false)) {
+      await exactPostBtn.last().click({ timeout: 6000 });
       await page.waitForTimeout(6000);
       await context.storageState({ path: statePath });
     } else {
