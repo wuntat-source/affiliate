@@ -45,6 +45,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           role: "ADMIN",
         });
         onLoginSuccess();
+      } else if (username.trim() === "Beruangmadu" && password.trim() === "Beruang4321_") {
+        setAuthSession({
+          id: "usr_member_beruang",
+          username: "Beruangmadu",
+          name: "Beruang Madu",
+          role: "MEMBER",
+        });
+        onLoginSuccess();
       } else {
         setError("Gagal terhubung ke server autentikasi.");
       }

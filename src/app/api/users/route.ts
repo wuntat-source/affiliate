@@ -25,6 +25,14 @@ if (!globalUsers.__systemUsers || globalUsers.__systemUsers.length === 0) {
       role: "ADMIN",
       createdAt: new Date().toISOString(),
     },
+    {
+      id: "usr_member_beruang",
+      username: "Beruangmadu",
+      password: "Beruang4321_",
+      name: "Beruang Madu",
+      role: "MEMBER",
+      createdAt: new Date().toISOString(),
+    },
   ];
 }
 

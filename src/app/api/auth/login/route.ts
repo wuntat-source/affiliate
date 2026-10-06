@@ -26,6 +26,14 @@ export async function POST(request: NextRequest) {
         role: "ADMIN",
         createdAt: new Date().toISOString(),
       },
+      {
+        id: "usr_member_beruang",
+        username: "Beruangmadu",
+        password: "Beruang4321_",
+        name: "Beruang Madu",
+        role: "MEMBER",
+        createdAt: new Date().toISOString(),
+      },
     ];
 
     const matched = users.find(
