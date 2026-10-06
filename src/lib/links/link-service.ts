@@ -10,6 +10,7 @@ export interface CreateAffiliateLinkInput {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  userId?: string;
 }
 
 export function buildTargetUrlWithUtm(
@@ -48,8 +49,11 @@ export async function createOrUpdateAffiliateLink(input: CreateAffiliateLinkInpu
 
     return link;
   } catch {
-    // Mock store fallback
-    const product = mockStore.products.find((p) => p.id === input.productId) || {
+    // Mock store fallback with userId
+    const targetUserId = input.userId || "usr_admin_kenzie";
+    const product = mockStore.products.find(
+      (p) => p.id === input.productId && (p.userId || "usr_admin_kenzie") === targetUserId
+    ) || {
       id: input.productId,
       name: "Produk Affiliate",
       category: "General",
@@ -57,6 +61,7 @@ export async function createOrUpdateAffiliateLink(input: CreateAffiliateLinkInpu
 
     const newLink = {
       id: `link_${nanoid(8)}`,
+      userId: targetUserId,
       productId: input.productId,
       product: {
         id: product.id,

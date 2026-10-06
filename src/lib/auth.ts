@@ -23,6 +23,11 @@ export function setAuthSession(user?: LoggedInUser): void {
     localStorage.setItem(AUTH_KEY, "authenticated");
     if (user) {
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      try {
+        document.cookie = `affiliatepost_user_id=${encodeURIComponent(user.id)}; path=/; max-age=2592000; SameSite=Lax`;
+        document.cookie = `affiliatepost_username=${encodeURIComponent(user.username)}; path=/; max-age=2592000; SameSite=Lax`;
+        document.cookie = `affiliatepost_role=${encodeURIComponent(user.role)}; path=/; max-age=2592000; SameSite=Lax`;
+      } catch {}
     }
   }
 }
@@ -49,6 +54,11 @@ export function clearAuthSession(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
+    try {
+      document.cookie = "affiliatepost_user_id=; path=/; max-age=0";
+      document.cookie = "affiliatepost_username=; path=/; max-age=0";
+      document.cookie = "affiliatepost_role=; path=/; max-age=0";
+    } catch {}
   }
 }
 

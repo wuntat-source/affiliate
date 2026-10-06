@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { schedulePostJob } from "@/lib/queue/post-queue";
-import { mockStore, MockPost } from "@/lib/mock-store";
+import { mockStore, MockPost, saveStoreToDisk } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
@@ -26,14 +26,10 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: posts });
     } catch {
-      let filtered = mockStore.posts;
-
-      // Filter by user if not admin
-      if (!userCtx.isAdmin) {
-        filtered = filtered.filter(
-          (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
-        );
-      }
+      // Strictly isolate by current user
+      let filtered = mockStore.posts.filter(
+        (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+      );
 
       if (status) {
         filtered = filtered.filter((p) => p.status === status);
@@ -53,7 +49,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const userCtx = getUserContext(request);
-    const { accountId, productId, affiliateLinkId, mainContent, replyContent, scheduledAt, aiDraftId, userId } = body;
+    const { accountId, productId, affiliateLinkId, mainContent, replyContent, scheduledAt, aiDraftId } = body;
 
     if (!accountId || !mainContent) {
       return NextResponse.json(
@@ -86,15 +82,21 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: post });
     } catch {
-      const account = mockStore.accounts.find((a) => a.id === accountId) || {
+      const account = mockStore.accounts.find(
+        (a) => a.id === accountId && (a.userId || "usr_admin_kenzie") === userCtx.userId
+      ) || {
         platform: "THREADS",
         username: "curhat_gadget_daily",
       };
-      const product = productId ? mockStore.products.find((p) => p.id === productId) : undefined;
+      const product = productId
+        ? mockStore.products.find(
+            (p) => p.id === productId && (p.userId || "usr_admin_kenzie") === userCtx.userId
+          )
+        : undefined;
 
       const newPost: MockPost = {
         id: `post_${nanoid(6)}`,
-        userId: userId || userCtx.userId,
+        userId: userCtx.userId,
         accountId,
         account: { platform: account.platform, username: account.username },
         productId: productId || undefined,
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
       };
 
       mockStore.posts.unshift(newPost);
+      saveStoreToDisk();
       return NextResponse.json({ success: true, data: newPost });
     }
   } catch (error: any) {

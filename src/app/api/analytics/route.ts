@@ -46,24 +46,18 @@ export async function GET(request: NextRequest) {
         },
       });
     } catch {
-      // Mock store fallback with user isolation
-      const products = userCtx.isAdmin
-        ? mockStore.products
-        : mockStore.products.filter(
-            (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
-          );
+      // Mock store fallback strictly isolated by user
+      const products = mockStore.products.filter(
+        (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+      );
 
-      const links = userCtx.isAdmin
-        ? mockStore.links
-        : mockStore.links.filter(
-            (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
-          );
+      const links = mockStore.links.filter(
+        (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
+      );
 
-      const posts = userCtx.isAdmin
-        ? mockStore.posts
-        : mockStore.posts.filter(
-            (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
-          );
+      const posts = mockStore.posts.filter(
+        (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+      );
 
       const totalProducts = products.length;
       const totalLinks = links.length;
@@ -71,17 +65,22 @@ export async function GET(request: NextRequest) {
       const publishedPosts = posts.filter((p) => p.status === "PUBLISHED").length;
       const scheduledPosts = posts.filter((p) => p.status === "SCHEDULED").length;
       const failedPosts = posts.filter((p) => p.status === "FAILED").length;
-      const totalAccounts = mockStore.accounts.filter((a) => a.status === "ACTIVE").length;
+      const totalAccounts = mockStore.accounts.filter(
+        (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId && a.status === "ACTIVE"
+      ).length;
 
-      // Real clicks accumulation
+      // Real clicks accumulation for this user's links
+      const userLinkIds = new Set(links.map((l) => l.id));
       const totalClicks = links.reduce((acc, curr) => acc + (curr.totalClicks || 0), 0);
 
       // Real clicks today calculation
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       
-      const clickLogs = mockStore.clickLogs || [];
-      const clicksToday = clickLogs.filter((log) => {
+      const allClickLogs = mockStore.clickLogs || [];
+      const userClickLogs = allClickLogs.filter((log) => userLinkIds.has(log.linkId));
+
+      const clicksToday = userClickLogs.filter((log) => {
         try {
           const logDate = new Date(log.clickedAt);
           const logDateStr = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, "0")}-${String(logDate.getDate()).padStart(2, "0")}`;
@@ -91,7 +90,7 @@ export async function GET(request: NextRequest) {
         }
       }).length;
 
-      // Generate 100% Real 7-day trend from actual clickLogs
+      // Generate 100% Real 7-day trend from actual clickLogs for this user
       const days = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
       const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
       const chartTrend = [];
@@ -103,7 +102,7 @@ export async function GET(request: NextRequest) {
         const dateLabel = `${d.getDate()} ${months[d.getMonth()]}`;
 
         // Count exact real clicks on this day
-        const dayCount = clickLogs.filter((log) => {
+        const dayCount = userClickLogs.filter((log) => {
           try {
             const logDate = new Date(log.clickedAt);
             const logDateStr = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, "0")}-${String(logDate.getDate()).padStart(2, "0")}`;

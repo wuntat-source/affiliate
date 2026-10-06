@@ -20,7 +20,11 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: links });
     } catch {
-      return NextResponse.json({ success: true, data: mockStore.links });
+      // Strictly isolate by current user
+      const filtered = mockStore.links.filter(
+        (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
+      );
+      return NextResponse.json({ success: true, data: filtered });
     }
   } catch (error: any) {
     return NextResponse.json(
@@ -34,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const userCtx = getUserContext(request);
-    const { productId, originalUrl, platform, customSlug, utmSource, utmMedium, utmCampaign, userId } = body;
+    const { productId, originalUrl, platform, customSlug, utmSource, utmMedium, utmCampaign } = body;
 
     if (!productId || !originalUrl) {
       return NextResponse.json(
@@ -52,20 +56,23 @@ export async function POST(request: NextRequest) {
         utmSource,
         utmMedium,
         utmCampaign,
+        userId: userCtx.userId,
       });
 
       return NextResponse.json({ success: true, data: link });
     } catch {
       const shortCode = customSlug?.trim() || nanoid(7);
-      const product = mockStore.products.find((p) => p.id === productId) || {
+      const product = mockStore.products.find(
+        (p) => p.id === productId && (p.userId || "usr_admin_kenzie") === userCtx.userId
+      ) || {
         id: productId,
-        name: "General Product",
+        name: "Produk Affiliate",
         category: "General",
       };
 
       const newLink: MockLink = {
         id: `link_${nanoid(6)}`,
-        userId: userId || userCtx.userId,
+        userId: userCtx.userId,
         productId,
         product: { id: product.id, name: product.name, category: product.category },
         originalUrl,
@@ -80,7 +87,9 @@ export async function POST(request: NextRequest) {
       mockStore.links.unshift(newLink);
 
       // Attach link to product object
-      const targetProd = mockStore.products.find((p) => p.id === productId);
+      const targetProd = mockStore.products.find(
+        (p) => p.id === productId && (p.userId || "usr_admin_kenzie") === userCtx.userId
+      );
       if (targetProd) {
         if (!targetProd.affiliateLinks) targetProd.affiliateLinks = [];
         targetProd.affiliateLinks.unshift({
@@ -106,6 +115,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const userCtx = getUserContext(request);
 
     if (!id) {
       return NextResponse.json({ error: "Link ID is required" }, { status: 400 });
@@ -117,7 +127,9 @@ export async function DELETE(request: NextRequest) {
       });
       return NextResponse.json({ success: true });
     } catch {
-      const index = mockStore.links.findIndex((l) => l.id === id);
+      const index = mockStore.links.findIndex(
+        (l) => l.id === id && (l.userId || "usr_admin_kenzie") === userCtx.userId
+      );
       if (index !== -1) {
         const deletedLink = mockStore.links[index];
         mockStore.links.splice(index, 1);

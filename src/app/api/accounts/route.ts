@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { mockStore, MockAccount } from "@/lib/mock-store";
+import { mockStore, MockAccount, saveStoreToDisk } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
@@ -20,12 +20,10 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: accounts });
     } catch {
-      let filtered = mockStore.accounts;
-      if (!userCtx.isAdmin) {
-        filtered = filtered.filter(
-          (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId
-        );
-      }
+      // Strictly isolate by current user
+      const filtered = mockStore.accounts.filter(
+        (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId
+      );
       return NextResponse.json({ success: true, data: filtered });
     }
   } catch (error: any) {
@@ -40,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const userCtx = getUserContext(request);
-    const { platform, accountName, username, accessToken, refreshToken, platformUserId, userId } = body;
+    const { platform, accountName, username, accessToken, refreshToken, platformUserId } = body;
 
     if (!platform || !username) {
       return NextResponse.json(
@@ -83,18 +81,19 @@ export async function POST(request: NextRequest) {
         (a) =>
           a.platform === platform &&
           a.username === username &&
-          (a.userId || "usr_admin_kenzie") === (userId || userCtx.userId)
+          (a.userId || "usr_admin_kenzie") === userCtx.userId
       );
 
       if (existing) {
         existing.accountName = accountName || username;
         existing.accessToken = accessToken || "sandbox_token";
+        saveStoreToDisk();
         return NextResponse.json({ success: true, data: existing });
       }
 
       const newAccount: MockAccount = {
         id: `acc_${nanoid(6)}`,
-        userId: userId || userCtx.userId,
+        userId: userCtx.userId,
         platform,
         accountName: accountName || username,
         username,
@@ -105,6 +104,7 @@ export async function POST(request: NextRequest) {
       };
 
       mockStore.accounts.unshift(newAccount);
+      saveStoreToDisk();
       return NextResponse.json({ success: true, data: newAccount });
     }
   } catch (error: any) {
@@ -119,6 +119,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const userCtx = getUserContext(request);
 
     if (!id) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
@@ -130,9 +131,12 @@ export async function DELETE(request: NextRequest) {
       });
       return NextResponse.json({ success: true });
     } catch {
-      const index = mockStore.accounts.findIndex((a) => a.id === id);
+      const index = mockStore.accounts.findIndex(
+        (a) => a.id === id && (a.userId || "usr_admin_kenzie") === userCtx.userId
+      );
       if (index !== -1) {
         mockStore.accounts.splice(index, 1);
+        saveStoreToDisk();
       }
       return NextResponse.json({ success: true });
     }

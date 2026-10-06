@@ -12,14 +12,16 @@ export async function GET(request: NextRequest) {
 
     try {
       const products = await prisma.product.findMany({
-        where: search
-          ? {
-              OR: [
-                { name: { contains: search, mode: "insensitive" } },
-                { category: { contains: search, mode: "insensitive" } },
-              ],
-            }
-          : undefined,
+        where: {
+          ...(search
+            ? {
+                OR: [
+                  { name: { contains: search, mode: "insensitive" } },
+                  { category: { contains: search, mode: "insensitive" } },
+                ],
+              }
+            : {}),
+        },
         include: {
           affiliateLinks: true,
           _count: {
@@ -34,7 +36,10 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: products });
     } catch {
-      let filtered = mockStore.products;
+      // Strictly isolate by current user
+      let filtered = mockStore.products.filter(
+        (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+      );
 
       if (search) {
         filtered = filtered.filter(
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const userCtx = getUserContext(request);
-    const { name, brand, category, price, currency, painPoints, usps, description, targetAudience, tags, userId } = body;
+    const { name, brand, category, price, currency, painPoints, usps, description, targetAudience, tags } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Product name is required" }, { status: 400 });
@@ -84,7 +89,7 @@ export async function POST(request: NextRequest) {
     } catch {
       const newMockProd: MockProduct = {
         id: `prod_${nanoid(6)}`,
-        userId: userId || userCtx.userId,
+        userId: userCtx.userId,
         name,
         brand: brand || null,
         category: category || "General",
@@ -114,6 +119,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const userCtx = getUserContext(request);
 
     if (!id) {
       return NextResponse.json({ error: "Product ID is required" }, { status: 400 });
@@ -125,11 +131,15 @@ export async function DELETE(request: NextRequest) {
       });
       return NextResponse.json({ success: true });
     } catch {
-      const index = mockStore.products.findIndex((p) => p.id === id);
+      const index = mockStore.products.findIndex(
+        (p) => p.id === id && (p.userId || "usr_admin_kenzie") === userCtx.userId
+      );
       if (index !== -1) {
         mockStore.products.splice(index, 1);
         // Also remove associated links
-        mockStore.links = mockStore.links.filter((l) => l.productId !== id);
+        mockStore.links = mockStore.links.filter(
+          (l) => l.productId !== id && (l.userId || "usr_admin_kenzie") === userCtx.userId
+        );
         saveStoreToDisk();
       }
       return NextResponse.json({ success: true });
