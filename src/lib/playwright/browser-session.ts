@@ -2,44 +2,37 @@ import { chromium, Browser, BrowserContext, Page } from "playwright";
 import path from "path";
 import fs from "fs";
 
-// Base directory to store browser session cookies (.sessions is ignored by Turbopack file scanner)
-const PROFILES_DIR = path.resolve(process.cwd(), ".sessions");
-
-if (!fs.existsSync(PROFILES_DIR)) {
-  fs.mkdirSync(PROFILES_DIR, { recursive: true });
-}
-
-export function getProfileDir(platform: string, username: string): string {
-  const safeName = `${platform.toLowerCase()}_${username.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-  const dir = path.join(PROFILES_DIR, safeName);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
+const SESSIONS_DIR = path.resolve(process.cwd(), ".sessions");
+if (!fs.existsSync(SESSIONS_DIR)) {
+  try {
+    fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+  } catch {}
 }
 
 export function getStateJsonPath(platform: string, username: string): string {
-  const profileDir = getProfileDir(platform, username);
-  return path.join(profileDir, "storage_state.json");
+  const safeName = `${platform.toLowerCase()}_${username.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  const userDir = path.join(SESSIONS_DIR, safeName);
+  if (!fs.existsSync(userDir)) {
+    try {
+      fs.mkdirSync(userDir, { recursive: true });
+    } catch {}
+  }
+  return path.join(userDir, "storage_state.json");
 }
 
-/**
- * In-memory map of currently open interactive login sessions
- */
-const activeLoginSessions: Record<
-  string,
-  {
-    browser: Browser;
-    context: BrowserContext;
-    page: Page;
-    platform: "THREADS" | "TWITTER";
-    username: string;
-    startedAt: number;
-  }
-> = {};
+export interface BrowserSessionState {
+  browser: Browser;
+  context: BrowserContext;
+  page: Page;
+  platform: "THREADS" | "TWITTER";
+  username: string;
+  startedAt: number;
+}
+
+export const activeLoginSessions: Record<string, BrowserSessionState> = {};
 
 /**
- * Open interactive browser window on the desktop
+ * Launch an interactive visible browser window for the user to login manually
  */
 export async function openInteractiveBrowser(
   platform: "THREADS" | "TWITTER",
@@ -48,7 +41,6 @@ export async function openInteractiveBrowser(
   const sessionKey = `${platform}_${username}`;
   const statePath = getStateJsonPath(platform, username);
 
-  // Close any existing open session for this user first
   if (activeLoginSessions[sessionKey]) {
     try {
       await activeLoginSessions[sessionKey].browser.close();
@@ -56,38 +48,34 @@ export async function openInteractiveBrowser(
     delete activeLoginSessions[sessionKey];
   }
 
-  try {
-    let browser: Browser;
-    const launchArgs = [
-      "--new-window",
-      "--disable-blink-features=AutomationControlled",
-      "--start-maximized",
-    ];
+  const launchArgs = [
+    "--new-window",
+    "--disable-blink-features=AutomationControlled",
+    "--start-maximized",
+  ];
 
+  let browser: Browser | null = null;
+  const launchConfigs = [
+    { channel: "chrome" as const, headless: false, args: launchArgs },
+    { channel: "msedge" as const, headless: false, args: launchArgs },
+    { headless: false, args: launchArgs },
+  ];
+
+  for (const config of launchConfigs) {
     try {
-      // 1. Try system Google Chrome (Guaranteed visible top window on Windows desktop)
-      browser = await chromium.launch({
-        channel: "chrome",
-        headless: false,
-        args: launchArgs,
-      });
-    } catch {
-      try {
-        // 2. Try Microsoft Edge
-        browser = await chromium.launch({
-          channel: "msedge",
-          headless: false,
-          args: launchArgs,
-        });
-      } catch {
-        // 3. Fallback to bundled Chromium
-        browser = await chromium.launch({
-          headless: false,
-          args: launchArgs,
-        });
-      }
-    }
+      browser = await chromium.launch(config);
+      break;
+    } catch {}
+  }
 
+  if (!browser) {
+    return {
+      success: false,
+      message: "Gagal meluncurkan browser Chromium/Chrome.",
+    };
+  }
+
+  try {
     const context = await browser.newContext({
       viewport: null,
       userAgent:
@@ -96,12 +84,10 @@ export async function openInteractiveBrowser(
     });
 
     const page = await context.newPage();
+    const loginUrl =
+      platform === "TWITTER" ? "https://x.com/i/flow/login" : "https://www.threads.net/login";
 
-    if (platform === "THREADS") {
-      await page.goto("https://www.threads.net/login", { waitUntil: "domcontentloaded" });
-    } else {
-      await page.goto("https://x.com/i/flow/login", { waitUntil: "domcontentloaded" });
-    }
+    await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
 
     activeLoginSessions[sessionKey] = {
       browser,
@@ -118,19 +104,18 @@ export async function openInteractiveBrowser(
 
     return {
       success: true,
-      message: "Jendela browser Chromium telah terbuka di layar Anda. Silakan login ke akun Threads Anda pada jendela yang muncul.",
+      message: "Jendela browser telah dibuka. Silakan login ke Threads pada jendela yang muncul.",
     };
   } catch (error: any) {
-    console.error("[Playwright Launch Error]:", error);
     return {
       success: false,
-      message: error.message || "Gagal membuka jendela browser Chromium.",
+      message: error.message || "Gagal membuka jendela browser.",
     };
   }
 }
 
 /**
- * Check if the user is currently logged in (in active open window or saved profile)
+ * Check if the user is currently logged in
  */
 export async function verifyAndSaveSession(
   platform: "THREADS" | "TWITTER",
@@ -139,23 +124,21 @@ export async function verifyAndSaveSession(
   const sessionKey = `${platform}_${username}`;
   const statePath = getStateJsonPath(platform, username);
 
-  // 1. Check active open browser window
   const active = activeLoginSessions[sessionKey];
   if (active) {
     try {
-      const currentUrl = active.page.url();
-      let isAuthed = false;
+      const cookies = await active.context.cookies();
+      const hasAuthCookie = cookies.some(
+        (c) => c.name === "sessionid" || c.name === "ds_user_id" || c.name === "auth_token"
+      );
 
-      if (platform === "THREADS") {
-        isAuthed =
-          !currentUrl.includes("/login") &&
-          (currentUrl.includes("threads.net") || currentUrl.includes("/@") || currentUrl.includes("/feed"));
-      } else {
-        isAuthed = !currentUrl.includes("/login") && (currentUrl.includes("x.com/home") || currentUrl.includes("twitter.com/home"));
-      }
+      const currentUrl = active.page.url();
+      const isAuthed =
+        hasAuthCookie ||
+        (!currentUrl.includes("/login") &&
+          (currentUrl.includes("threads.net") || currentUrl.includes("threads.com")));
 
       if (isAuthed) {
-        // Save session cookies & state
         await active.context.storageState({ path: statePath });
         await active.browser.close();
         delete activeLoginSessions[sessionKey];
@@ -164,18 +147,12 @@ export async function verifyAndSaveSession(
           loggedIn: true,
           message: `✅ Sesi login @${username} berhasil disimpan dan akun terhubung aktif!`,
         };
-      } else {
-        return {
-          loggedIn: false,
-          message: `Browser masih di halaman login. Selesaikan login pada jendela Chromium, lalu klik lagi 'Selesai Login & Simpan Sesi'.`,
-        };
       }
-    } catch (err: any) {
+    } catch {
       delete activeLoginSessions[sessionKey];
     }
   }
 
-  // 2. Check saved storage state file
   return checkLoginStatus(platform, username);
 }
 
@@ -195,7 +172,7 @@ export async function checkLoginStatus(
     };
   }
 
-  // 1. Instant check from saved session state cookies
+  // Check from saved cookies in storage state file
   try {
     const raw = JSON.parse(fs.readFileSync(statePath, "utf-8"));
     const hasAuthCookie = (raw.cookies || []).some(
@@ -214,50 +191,10 @@ export async function checkLoginStatus(
     }
   } catch {}
 
-  // 2. Fallback live verification with headless browser
-  try {
-    const browser = await chromium.launch({
-      headless: true,
-      args: ["--disable-blink-features=AutomationControlled"],
-    });
-
-    const context = await browser.newContext({
-      storageState: statePath,
-    });
-
-    const page = await context.newPage();
-    const targetUrl = platform === "THREADS" ? "https://www.threads.net/" : "https://x.com/home";
-
-    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
-    await page.waitForTimeout(2000);
-
-    const currentUrl = page.url();
-    let isAuthed = false;
-
-    if (platform === "THREADS") {
-      isAuthed = !currentUrl.includes("/login") && !currentUrl.includes("accounts.google.com");
-    } else {
-      isAuthed = !currentUrl.includes("/login") && !currentUrl.includes("/i/flow/login");
-    }
-
-    if (isAuthed) {
-      await context.storageState({ path: statePath });
-    }
-
-    await browser.close();
-
-    return {
-      loggedIn: isAuthed,
-      message: isAuthed
-        ? `✅ Sesi browser untuk @${username} AKTIF & Siap Auto-Post!`
-        : `⚠️ Akun @${username} belum login atau sesi telah berakhir. Klik 'Buka Browser Login Threads' untuk login kembali.`,
-    };
-  } catch (err: any) {
-    return {
-      loggedIn: false,
-      message: err.message || "Gagal memverifikasi sesi browser",
-    };
-  }
+  return {
+    loggedIn: false,
+    message: `⚠️ Sesi login @${username} belum terautentikasi (cookie login belum ditemukan). Silakan klik 'Buka Browser Login Threads' dan login ke akun Threads Anda.`,
+  };
 }
 
 /**
@@ -276,12 +213,27 @@ export async function postThreadViaPlaywright(options: {
   if (!fs.existsSync(statePath)) {
     return {
       success: false,
-      error: `Sesi login untuk @${username} belum ditemukan. Silakan login terlebih dahulu melalui menu Social Accounts.`,
+      error: `Sesi login untuk @${username} belum ditemukan. Silakan buka menu Social Accounts -> 'Buka Browser Login Threads' untuk login terlebih dahulu.`,
     };
   }
 
+  // Quick check if session cookies exist
   try {
-    const browser = await chromium.launch({
+    const raw = JSON.parse(fs.readFileSync(statePath, "utf-8"));
+    const hasAuthCookie = (raw.cookies || []).some(
+      (c: any) => c.name === "sessionid" || c.name === "ds_user_id"
+    );
+    if (!hasAuthCookie) {
+      return {
+        success: false,
+        error: `Akun @${username} belum login ke Threads (cookie autentikasi sessionid tidak ada). Silakan buka menu Social Accounts -> 'Buka Browser Login Threads' dan lakukan login di browser.`,
+      };
+    }
+  } catch {}
+
+  let browser: Browser | null = null;
+  try {
+    browser = await chromium.launch({
       headless,
       args: [
         "--disable-blink-features=AutomationControlled",
@@ -298,9 +250,9 @@ export async function postThreadViaPlaywright(options: {
 
     const page = await context.newPage();
 
-    // IF TARGET POST URL IS PROVIDED: Post as a comment reply directly to the target thread
+    // 1. Target Post Reply Flow
     if (targetPostUrl && targetPostUrl.startsWith("http")) {
-      await page.goto(targetPostUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.goto(targetPostUrl, { waitUntil: "domcontentloaded", timeout: 25000 });
       await page.waitForTimeout(3000);
 
       const replyTrigger = page
@@ -308,7 +260,6 @@ export async function postThreadViaPlaywright(options: {
         .or(page.locator('svg[aria-label="Reply"]'))
         .or(page.locator('text="Balas..."'))
         .or(page.locator('text="Reply..."'))
-        .or(page.locator('text="Komentar"'))
         .or(page.locator('div[role="textbox"]'));
 
       if (await replyTrigger.first().isVisible({ timeout: 5000 }).catch(() => false)) {
@@ -316,24 +267,14 @@ export async function postThreadViaPlaywright(options: {
         await page.waitForTimeout(1000);
       }
 
-      let textbox = page.locator('div[role="textbox"]').first();
-      if (!(await textbox.isVisible().catch(() => false))) {
-        textbox = page.locator('div[contenteditable="true"]').first();
-      }
-
+      const textbox = page.locator('div[role="textbox"], div[data-lexical-editor="true"], div[contenteditable="true"]').first();
+      await textbox.waitFor({ state: "visible", timeout: 8000 });
       await textbox.click();
       await textbox.pressSequentially(mainText, { delay: 15 });
       await page.waitForTimeout(1000);
 
       const postBtn = page
-        .locator('div[role="button"]:has-text("Posting")')
-        .or(page.locator('div[role="button"]:has-text("Post")'))
-        .or(page.locator('div[role="button"]:has-text("Kirim")'))
-        .or(page.locator('div[role="button"]:has-text("Balas")'))
-        .or(page.locator('button:has-text("Posting")'))
-        .or(page.locator('button:has-text("Post")'))
-        .or(page.locator('button:has-text("Kirim")'))
-        .or(page.locator('button:has-text("Balas")'));
+        .locator('div[role="button"]:has-text("Posting"), div[role="button"]:has-text("Post"), div[role="button"]:has-text("Kirim"), div[role="button"]:has-text("Balas"), button:has-text("Posting"), button:has-text("Post"), button:has-text("Kirim")');
 
       if (await postBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
         await postBtn.first().click();
@@ -341,21 +282,27 @@ export async function postThreadViaPlaywright(options: {
         await context.storageState({ path: statePath });
       } else {
         await browser.close();
-        return { success: false, error: "Tombol posting/kirim balasan tidak ditemukan pada target post." };
+        return { success: false, error: "Tombol posting balasan tidak ditemukan." };
       }
 
       await browser.close();
+      return { success: true, message: "Berhasil memposting balasan ke thread target!" };
+    }
+
+    // 2. New Main Thread + Chained Replies Flow
+    await page.goto("https://www.threads.net/", { waitUntil: "domcontentloaded", timeout: 25000 });
+    await page.waitForTimeout(3000);
+
+    const currentUrl = page.url();
+    if (currentUrl.includes("/login") || currentUrl.includes("accounts.google.com")) {
+      await browser.close();
       return {
-        success: true,
-        message: "Berhasil memposting komentar balasan ke target thread!",
+        success: false,
+        error: `Sesi login @${username} telah berakhir atau belum login. Buka menu Social Accounts -> 'Buka Browser Login Threads' untuk login kembali.`,
       };
     }
 
-    // OTHERWISE: Go to threads home and post a new thread
-    await page.goto("https://www.threads.com/", { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(3000);
-
-    // Look for new post composer button or box
+    // Click composer trigger
     const composerTrigger = page
       .locator('text="Utas baru"')
       .or(page.locator('text="Start a thread"'))
@@ -370,12 +317,8 @@ export async function postThreadViaPlaywright(options: {
       await page.waitForTimeout(1000);
     }
 
-    // Find textbox
-    let textbox = page.locator('div[role="textbox"]').first();
-    if (!(await textbox.isVisible().catch(() => false))) {
-      textbox = page.locator('div[contenteditable="true"]').first();
-    }
-
+    const textbox = page.locator('div[role="textbox"], div[data-lexical-editor="true"], div[contenteditable="true"]').first();
+    await textbox.waitFor({ state: "visible", timeout: 8000 });
     await textbox.click();
     await textbox.pressSequentially(mainText, { delay: 15 });
     await page.waitForTimeout(1000);
@@ -385,7 +328,6 @@ export async function postThreadViaPlaywright(options: {
       for (const part of replyParts) {
         if (!part.trim()) continue;
 
-        // Click "Add to thread" / "Tambahkan ke utas"
         const addThreadBtn = page
           .locator('text="Tambahkan ke utas"')
           .or(page.locator('text="Add to thread"'))
@@ -398,7 +340,7 @@ export async function postThreadViaPlaywright(options: {
           await page.waitForTimeout(800);
         }
 
-        const lastTextbox = page.locator('div[role="textbox"]').last();
+        const lastTextbox = page.locator('div[role="textbox"], div[data-lexical-editor="true"], div[contenteditable="true"]').last();
         await lastTextbox.click();
         await lastTextbox.pressSequentially(part, { delay: 15 });
         await page.waitForTimeout(800);
@@ -407,17 +349,11 @@ export async function postThreadViaPlaywright(options: {
 
     // Click Post / Posting / Kirim button
     const postBtn = page
-      .locator('div[role="button"]:has-text("Posting")')
-      .or(page.locator('div[role="button"]:has-text("Post")') )
-      .or(page.locator('div[role="button"]:has-text("Kirim")'))
-      .or(page.locator('button:has-text("Posting")'))
-      .or(page.locator('button:has-text("Post")'))
-      .or(page.locator('button:has-text("Kirim")'));
+      .locator('div[role="button"]:has-text("Posting"), div[role="button"]:has-text("Post"), div[role="button"]:has-text("Kirim"), button:has-text("Posting"), button:has-text("Post"), button:has-text("Kirim")');
 
-    if (await postBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (await postBtn.first().isVisible({ timeout: 6000 }).catch(() => false)) {
       await postBtn.first().click();
-      await page.waitForTimeout(6000); // Wait for post publication to complete
-      // Save refreshed cookies
+      await page.waitForTimeout(6000);
       await context.storageState({ path: statePath });
     } else {
       await browser.close();
@@ -425,12 +361,16 @@ export async function postThreadViaPlaywright(options: {
     }
 
     await browser.close();
-
     return {
       success: true,
       message: "Berhasil memposting utas cerita ke Threads via Playwright Automation!",
     };
   } catch (error: any) {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {}
+    }
     console.error("[Playwright Auto-Post Error]:", error);
     return {
       success: false,
