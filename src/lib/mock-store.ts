@@ -14,7 +14,7 @@ export interface MockProduct {
   description?: string | null;
   affiliateLinks?: Array<{ id: string; shortCode: string; originalUrl: string; platform: string }>;
   _count?: { posts: number; aiDrafts: number };
-  createdAt: Date;
+  createdAt: Date | string;
 }
 
 export interface MockAccount {
@@ -26,7 +26,7 @@ export interface MockAccount {
   status: "ACTIVE" | "EXPIRED" | "RATE_LIMITED" | "DISCONNECTED";
   accessToken: string;
   _count?: { posts: number };
-  createdAt: Date;
+  createdAt: Date | string;
 }
 
 export interface MockLink {
@@ -40,7 +40,7 @@ export interface MockLink {
   utmSource?: string;
   totalClicks: number;
   _count?: { clicks: number; posts: number };
-  createdAt: Date;
+  createdAt: Date | string;
 }
 
 export interface MockPost {
@@ -55,12 +55,22 @@ export interface MockPost {
   mainContent: string;
   replyContent?: string;
   status: "DRAFT" | "SCHEDULED" | "QUEUED" | "PROCESSING" | "PUBLISHED" | "FAILED";
-  scheduledAt?: Date | null;
-  publishedAt?: Date | null;
+  scheduledAt?: Date | string | null;
+  publishedAt?: Date | string | null;
   externalMainId?: string;
   externalReplyId?: string;
   lastError?: string | null;
-  createdAt: Date;
+  createdAt: Date | string;
+}
+
+export interface MockClickLog {
+  id: string;
+  linkId: string;
+  shortCode: string;
+  clickedAt: string;
+  userAgent?: string;
+  referer?: string;
+  ip?: string;
 }
 
 const DB_PATH = path.resolve(process.cwd(), ".sessions/database.json");
@@ -74,10 +84,11 @@ function ensureDirExists() {
   }
 }
 
+// Only real product (LABORÉ Sunscreen with real Shopee affiliate link)
 const DEFAULT_PRODUCTS: MockProduct[] = [
   {
     id: "prod_labore_sunscreen",
-    userId: "usr_admin_default",
+    userId: "usr_admin_kenzie",
     name: "NEW! LABORÉ ACNE & OIL CORRECT PHYSICAL SUNSCREEN SPF 50+/PA",
     brand: "LABORÉ",
     category: "Health & Beauty",
@@ -95,58 +106,14 @@ const DEFAULT_PRODUCTS: MockProduct[] = [
       },
     ],
     _count: { posts: 1, aiDrafts: 0 },
-    createdAt: new Date(),
-  },
-  {
-    id: "prod_botol_2l",
-    userId: "usr_admin_default",
-    name: "Botol Minum Motivasi 2L Time Marker",
-    brand: "Quifit",
-    category: "Home & Living",
-    price: 65000,
-    currency: "IDR",
-    painPoints: "Sering lupa minum saat kerja sampai pusing/dehidrasi dan malas bolak-balik isi air",
-    usps: "Kapasitas besar 2 Liter, ada penanda waktu jam motivasi, bahan BPA Free anti tumpah",
-    description: "Botol minum viral motivasi dengan sedotan dan penanda waktu.",
-    affiliateLinks: [
-      {
-        id: "link_botol_01",
-        shortCode: "botol-2l-viral",
-        originalUrl: "https://s.shopee.co.id/botol2L",
-        platform: "SHOPEE",
-      },
-    ],
-    _count: { posts: 0, aiDrafts: 0 },
-    createdAt: new Date(),
-  },
-  {
-    id: "prod_laptop_stand",
-    userId: "usr_admin_default",
-    name: "Stand Laptop Ergonomis Aluminium Lipat",
-    brand: "Orico",
-    category: "Gadget & Tech",
-    price: 125000,
-    currency: "IDR",
-    painPoints: "Leher dan punggung sering pegal karena posisi laptop terlalu rendah saat kerja seharian",
-    usps: "Material aluminium solid kokoh, 6 tingkat ketinggian adjustable, sirkulasi udara laptop dingin",
-    description: "Stand laptop portabel yang dapat dilipat dan mudah dibawa ke mana saja.",
-    affiliateLinks: [
-      {
-        id: "link_laptop_01",
-        shortCode: "stand-laptop-alu",
-        originalUrl: "https://s.shopee.co.id/laptopstand",
-        platform: "SHOPEE",
-      },
-    ],
-    _count: { posts: 0, aiDrafts: 0 },
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
   },
 ];
 
 const DEFAULT_LINKS: MockLink[] = [
   {
     id: "link_labore_01",
-    userId: "usr_admin_default",
+    userId: "usr_admin_kenzie",
     productId: "prod_labore_sunscreen",
     product: {
       id: "prod_labore_sunscreen",
@@ -157,57 +124,23 @@ const DEFAULT_LINKS: MockLink[] = [
     shortCode: "labore-acne-sunscreen",
     platform: "SHOPEE",
     utmSource: "threads_curhat",
-    totalClicks: 24,
-    _count: { clicks: 24, posts: 1 },
-    createdAt: new Date(),
-  },
-  {
-    id: "link_botol_01",
-    userId: "usr_admin_default",
-    productId: "prod_botol_2l",
-    product: {
-      id: "prod_botol_2l",
-      name: "Botol Minum Motivasi 2L Time Marker",
-      category: "Home & Living",
-    },
-    originalUrl: "https://s.shopee.co.id/botol2L",
-    shortCode: "botol-2l-viral",
-    platform: "SHOPEE",
-    utmSource: "threads_curhat",
-    totalClicks: 12,
-    _count: { clicks: 12, posts: 0 },
-    createdAt: new Date(),
-  },
-  {
-    id: "link_laptop_01",
-    userId: "usr_admin_default",
-    productId: "prod_laptop_stand",
-    product: {
-      id: "prod_laptop_stand",
-      name: "Stand Laptop Ergonomis Aluminium Lipat",
-      category: "Gadget & Tech",
-    },
-    originalUrl: "https://s.shopee.co.id/laptopstand",
-    shortCode: "stand-laptop-alu",
-    platform: "SHOPEE",
-    utmSource: "threads_curhat",
-    totalClicks: 8,
-    _count: { clicks: 8, posts: 0 },
-    createdAt: new Date(),
+    totalClicks: 0,
+    _count: { clicks: 0, posts: 1 },
+    createdAt: new Date().toISOString(),
   },
 ];
 
 const DEFAULT_ACCOUNTS: MockAccount[] = [
   {
     id: "acc_pintulangitketujuh",
-    userId: "usr_admin_default",
+    userId: "usr_admin_kenzie",
     platform: "THREADS",
-    accountName: "@pintulangitketujuh (Browser Session)",
+    accountName: "@pintulangitketujuh",
     username: "pintulangitketujuh",
     status: "ACTIVE",
     accessToken: "browser_session_auth",
     _count: { posts: 1 },
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
   },
 ];
 
@@ -216,16 +149,18 @@ function loadFromDisk(): {
   accounts: MockAccount[];
   links: MockLink[];
   posts: MockPost[];
+  clickLogs: MockClickLog[];
 } {
   ensureDirExists();
   if (fs.existsSync(DB_PATH)) {
     try {
       const raw = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
       return {
-        products: Array.isArray(raw.products) && raw.products.length > 0 ? raw.products : DEFAULT_PRODUCTS,
-        accounts: Array.isArray(raw.accounts) && raw.accounts.length > 0 ? raw.accounts : DEFAULT_ACCOUNTS,
-        links: Array.isArray(raw.links) && raw.links.length > 0 ? raw.links : DEFAULT_LINKS,
+        products: Array.isArray(raw.products) ? raw.products : DEFAULT_PRODUCTS,
+        accounts: Array.isArray(raw.accounts) ? raw.accounts : DEFAULT_ACCOUNTS,
+        links: Array.isArray(raw.links) ? raw.links : DEFAULT_LINKS,
         posts: Array.isArray(raw.posts) ? raw.posts : [],
+        clickLogs: Array.isArray(raw.clickLogs) ? raw.clickLogs : [],
       };
     } catch {}
   }
@@ -236,6 +171,7 @@ function loadFromDisk(): {
     accounts: DEFAULT_ACCOUNTS,
     links: DEFAULT_LINKS,
     posts: [],
+    clickLogs: [],
   };
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2));
@@ -246,13 +182,19 @@ function loadFromDisk(): {
 export function saveStoreToDisk() {
   ensureDirExists();
   try {
-    const data = {
-      products: mockStore.products,
-      accounts: mockStore.accounts,
-      links: mockStore.links,
-      posts: mockStore.posts,
-    };
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+    let raw: any = {};
+    if (fs.existsSync(DB_PATH)) {
+      try {
+        raw = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+      } catch {}
+    }
+    raw.products = mockStore.products;
+    raw.accounts = mockStore.accounts;
+    raw.links = mockStore.links;
+    raw.posts = mockStore.posts;
+    raw.clickLogs = mockStore.clickLogs;
+
+    fs.writeFileSync(DB_PATH, JSON.stringify(raw, null, 2));
   } catch (e) {
     console.error("[Store Persistence Error]:", e);
   }
@@ -264,19 +206,21 @@ const globalStore = globalThis as unknown as {
   __mockAccounts?: MockAccount[];
   __mockLinks?: MockLink[];
   __mockPosts?: MockPost[];
+  __mockClickLogs?: MockClickLog[];
 };
 
-if (!globalStore.__mockProducts || globalStore.__mockProducts.length === 0) {
+if (!globalStore.__mockProducts) {
   const diskData = loadFromDisk();
   globalStore.__mockProducts = diskData.products;
   globalStore.__mockAccounts = diskData.accounts;
   globalStore.__mockLinks = diskData.links;
   globalStore.__mockPosts = diskData.posts;
+  globalStore.__mockClickLogs = diskData.clickLogs;
 }
 
 export const mockStore = {
   get products(): MockProduct[] {
-    return globalStore.__mockProducts!;
+    return globalStore.__mockProducts || [];
   },
   set products(val: MockProduct[]) {
     globalStore.__mockProducts = val;
@@ -284,7 +228,7 @@ export const mockStore = {
   },
 
   get accounts(): MockAccount[] {
-    return globalStore.__mockAccounts!;
+    return globalStore.__mockAccounts || [];
   },
   set accounts(val: MockAccount[]) {
     globalStore.__mockAccounts = val;
@@ -292,7 +236,7 @@ export const mockStore = {
   },
 
   get links(): MockLink[] {
-    return globalStore.__mockLinks!;
+    return globalStore.__mockLinks || [];
   },
   set links(val: MockLink[]) {
     globalStore.__mockLinks = val;
@@ -300,10 +244,18 @@ export const mockStore = {
   },
 
   get posts(): MockPost[] {
-    return globalStore.__mockPosts!;
+    return globalStore.__mockPosts || [];
   },
   set posts(val: MockPost[]) {
     globalStore.__mockPosts = val;
+    saveStoreToDisk();
+  },
+
+  get clickLogs(): MockClickLog[] {
+    return globalStore.__mockClickLogs || [];
+  },
+  set clickLogs(val: MockClickLog[]) {
+    globalStore.__mockClickLogs = val;
     saveStoreToDisk();
   },
 };

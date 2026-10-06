@@ -71,27 +71,52 @@ export async function GET(request: NextRequest) {
       const publishedPosts = posts.filter((p) => p.status === "PUBLISHED").length;
       const scheduledPosts = posts.filter((p) => p.status === "SCHEDULED").length;
       const failedPosts = posts.filter((p) => p.status === "FAILED").length;
-      const totalClicks = links.reduce((acc, curr) => acc + (curr.totalClicks || 0), 0);
       const totalAccounts = mockStore.accounts.filter((a) => a.status === "ACTIVE").length;
-      const clicksToday = Math.max(Math.round(totalClicks * 0.28), totalClicks > 0 ? 5 : 0);
 
-      // Generate 7-day trend based on current date
+      // Real clicks accumulation
+      const totalClicks = links.reduce((acc, curr) => acc + (curr.totalClicks || 0), 0);
+
+      // Real clicks today calculation
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      
+      const clickLogs = mockStore.clickLogs || [];
+      const clicksToday = clickLogs.filter((log) => {
+        try {
+          const logDate = new Date(log.clickedAt);
+          const logDateStr = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, "0")}-${String(logDate.getDate()).padStart(2, "0")}`;
+          return logDateStr === todayStr;
+        } catch {
+          return false;
+        }
+      }).length;
+
+      // Generate 100% Real 7-day trend from actual clickLogs
       const days = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
       const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-      const now = new Date();
       const chartTrend = [];
 
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(now.getDate() - i);
+        const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const dateLabel = `${d.getDate()} ${months[d.getMonth()]}`;
-        // Distribute portion of clicks
-        const weight = i === 0 ? 0.28 : i === 1 ? 0.22 : i === 2 ? 0.18 : i === 3 ? 0.12 : i === 4 ? 0.10 : 0.05;
-        const val = totalClicks > 0 ? Math.round(totalClicks * weight) : 0;
+
+        // Count exact real clicks on this day
+        const dayCount = clickLogs.filter((log) => {
+          try {
+            const logDate = new Date(log.clickedAt);
+            const logDateStr = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, "0")}-${String(logDate.getDate()).padStart(2, "0")}`;
+            return logDateStr === dayStr;
+          } catch {
+            return false;
+          }
+        }).length;
+
         chartTrend.push({
           date: dateLabel,
           day: days[d.getDay()],
-          value: val,
+          value: dayCount,
         });
       }
 
