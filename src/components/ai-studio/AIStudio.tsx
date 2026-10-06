@@ -51,13 +51,16 @@ export const AIStudio: React.FC = () => {
   const [usps, setUsps] = useState("");
   const [affiliateUrl, setAffiliateUrl] = useState("");
   const [tone, setTone] = useState<"CASUAL_CURHAT" | "VIRAL_STORY" | "PROBLEM_SOLVER" | "HONEST_REVIEW" | "URGENT_DEAL">("CASUAL_CURHAT");
+  const [threadLength, setThreadLength] = useState<number>(1); // 1 = Single Reply, 5 = 5 Parts, 7 = 7 Parts, 10 = 10 Parts
 
   // Output states
   const [loading, setLoading] = useState(false);
   const [mainPost, setMainPost] = useState("");
   const [replyPost, setReplyPost] = useState("");
+  const [threadPosts, setThreadPosts] = useState<string[]>([]);
   const [copiedMain, setCopiedMain] = useState(false);
   const [copiedReply, setCopiedReply] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   // Queue scheduling state
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
@@ -167,6 +170,7 @@ export const AIStudio: React.FC = () => {
           usps,
           affiliateUrl,
           tone,
+          threadLength,
           productId: selectedProductId || undefined,
           saveDraft: true,
         }),
@@ -176,6 +180,11 @@ export const AIStudio: React.FC = () => {
       if (data.success && data.data) {
         setMainPost(data.data.mainPost);
         setReplyPost(data.data.replyPost);
+        if (data.data.threadPosts && data.data.threadPosts.length > 0) {
+          setThreadPosts(data.data.threadPosts);
+        } else {
+          setThreadPosts([data.data.mainPost, data.data.replyPost].filter(Boolean));
+        }
       }
     } catch (err) {
       console.error("AI Generation error:", err);
@@ -189,8 +198,11 @@ export const AIStudio: React.FC = () => {
     setValidationError(null);
     setQueueSuccessMsg(null);
 
-    if (!mainPost.trim() || !replyPost.trim()) {
-      setValidationError("Postingan belum dibuat! Harap lengkapi semua isian formulir di sebelah kiri dan klik tombol 'Generate Threads Curhat' terlebih dahulu.");
+    const effectiveMain = threadPosts.length > 0 ? threadPosts[0] : mainPost;
+    const effectiveReply = threadPosts.length > 1 ? threadPosts.slice(1).join("\n\n---\n\n") : replyPost;
+
+    if (!effectiveMain.trim()) {
+      setValidationError("Postingan belum dibuat! Harap lengkapi semua isian formulir di sebelah kiri dan klik tombol 'Generate' terlebih dahulu.");
       return;
     }
 
@@ -209,8 +221,8 @@ export const AIStudio: React.FC = () => {
         body: JSON.stringify({
           accountId: activeAccId,
           productId: selectedProductId || undefined,
-          mainContent: mainPost,
-          replyContent: replyPost,
+          mainContent: effectiveMain,
+          replyContent: effectiveReply,
           scheduledAt: immediate ? undefined : scheduleTime || undefined,
         }),
       });
@@ -222,9 +234,9 @@ export const AIStudio: React.FC = () => {
             method: "POST",
             headers: getAuthHeaders(),
           });
-          setQueueSuccessMsg("✅ Postingan berhasil dipublikasikan langsung ke Threads!");
+          setQueueSuccessMsg("✅ Postingan dan seluruh balasan berantai berhasil dipublikasikan ke Threads!");
         } else {
-          setQueueSuccessMsg("✅ Postingan berhasil dimasukkan ke jadwal antrean (Queue)!");
+          setQueueSuccessMsg("✅ Postingan & utas cerita berhasil dimasukkan ke jadwal antrean (Queue)!");
         }
       } else {
         setValidationError(data.error || "Gagal memproses postingan.");
@@ -434,6 +446,47 @@ export const AIStudio: React.FC = () => {
                 })}
               </div>
             </div>
+
+            {/* Thread Format & Storytelling Length (1 to 10 Part Replies) */}
+            <div className="bg-orange-50/50 border border-orange-200/80 rounded-xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-orange-950 flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-orange-600" />
+                  Format Cerita / Panjang Balasan Utas
+                </label>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
+                  {threadLength === 1 ? "1 Reply Singkat" : `${threadLength} Balasan Berantai`}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Pilih format curhat singkat atau storytelling bersambung 5 - 10 balasan untuk engagement dan konversi klik tertinggi.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                {[
+                  { length: 1, label: "1 Balasan", desc: "Quick Curhat" },
+                  { length: 5, label: "5 Cerita", desc: "Story Arc 5 Part" },
+                  { length: 7, label: "7 Cerita", desc: "Deep Narrative" },
+                  { length: 10, label: "10 Cerita", desc: "Mega Thread" },
+                ].map((item) => {
+                  const isSelected = threadLength === item.length;
+                  return (
+                    <button
+                      key={item.length}
+                      type="button"
+                      onClick={() => setThreadLength(item.length)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-white border-orange-500 text-orange-900 font-bold shadow-xs ring-2 ring-orange-400/20"
+                          : "bg-white/70 border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="text-xs font-bold">{item.label}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Validation Alert Notification */}
@@ -453,12 +506,16 @@ export const AIStudio: React.FC = () => {
             {loading ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                Generating Soft-Selling Story...
+                <span>Membuat {threadLength > 1 ? `Utas Cerita ${threadLength} Part...` : "Soft-Selling Story..."}</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                Generate Threads Curhat & Reply Link
+                <span>
+                  {threadLength > 1
+                    ? `Generate Storytelling Utas (${threadLength} Balasan Berantai)`
+                    : "Generate Threads Curhat & Reply Link"}
+                </span>
               </>
             )}
           </button>
@@ -482,84 +539,171 @@ export const AIStudio: React.FC = () => {
                       : "bg-slate-100 text-slate-600 border border-slate-200"
                   }`}
                 >
-                  {mainPostChars} / 350 chars {isOptimalThreads && "✓ Ideal"}
+                  {threadPosts.length > 2
+                    ? `${threadPosts.length} Chained Posts`
+                    : `${mainPostChars} / 350 chars`}
                 </span>
               </div>
             </div>
 
-            {/* Post 1: Main Story */}
-            <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-xs font-bold text-white">
-                    U
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-900">your_username</span>
-                    <span className="text-[10px] text-slate-400 ml-1.5">just now</span>
-                  </div>
-                </div>
-                {mainPost && (
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(mainPost);
-                      setCopiedMain(true);
-                      setTimeout(() => setCopiedMain(false), 2000);
-                    }}
-                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-all cursor-pointer"
-                    title="Copy main post"
-                  >
-                    {copiedMain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                )}
-              </div>
+            {/* Dynamic Multi-Part Thread Simulator */}
+            {threadPosts.length > 2 ? (
+              <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+                {threadPosts.map((postText, idx) => {
+                  const isFirst = idx === 0;
+                  const isLast = idx === threadPosts.length - 1;
+                  const isCopied = copiedIndex === idx;
 
-              <textarea
-                rows={4}
-                value={mainPost}
-                onChange={(e) => setMainPost(e.target.value)}
-                placeholder="Hasil postingan utama curhat Threads akan muncul di sini setelah kamu klik tombol Generate..."
-                className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
-              />
-            </div>
-
-            {/* Post 2: Reply Thread with Link */}
-            <div className="relative pl-6 before:content-[''] before:absolute before:left-3 before:top-0 before:bottom-0 before:w-0.5 before:bg-slate-200">
-              <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white">
-                      U
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-indigo-900">your_username</span>
-                      <span className="text-[10px] text-indigo-500 ml-1.5">Reply #1 (Affiliate Link)</span>
-                    </div>
-                  </div>
-                  {replyPost && (
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(replyPost);
-                        setCopiedReply(true);
-                        setTimeout(() => setCopiedReply(false), 2000);
-                      }}
-                      className="p-1.5 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 transition-all cursor-pointer"
-                      title="Copy reply post"
+                  return (
+                    <div
+                      key={idx}
+                      className={`relative pl-6 ${
+                        !isLast
+                          ? "before:content-[''] before:absolute before:left-3 before:top-4 before:bottom-0 before:w-0.5 before:bg-indigo-200"
+                          : ""
+                      }`}
                     >
-                      {copiedReply ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  )}
+                      <div
+                        className={`rounded-xl p-4 space-y-2.5 border transition-all ${
+                          isLast
+                            ? "bg-orange-50/70 border-orange-200/90 shadow-2xs"
+                            : isFirst
+                            ? "bg-slate-50 border-slate-200/80"
+                            : "bg-indigo-50/40 border-indigo-100"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
+                                isLast ? "bg-orange-600" : isFirst ? "bg-slate-900" : "bg-indigo-600"
+                              }`}
+                            >
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-slate-900">
+                                {isFirst
+                                  ? "Post Utama (Hook)"
+                                  : isLast
+                                  ? "Part Akhir (Call-to-Action & Link Afiliasi)"
+                                  : `Part ${idx + 1} (Story Arc)`}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(postText);
+                              setCopiedIndex(idx);
+                              setTimeout(() => setCopiedIndex(null), 2000);
+                            }}
+                            className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-all cursor-pointer text-[10px] flex items-center gap-1"
+                            title="Copy part"
+                          >
+                            {isCopied ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        <textarea
+                          rows={3}
+                          value={postText}
+                          onChange={(e) => {
+                            const newArr = [...threadPosts];
+                            newArr[idx] = e.target.value;
+                            setThreadPosts(newArr);
+                            if (idx === 0) setMainPost(e.target.value);
+                            else setReplyPost(newArr.slice(1).join("\n\n---\n\n"));
+                          }}
+                          className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0 font-medium"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                {/* Post 1: Main Story */}
+                <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-xs font-bold text-white">
+                        U
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900">your_username</span>
+                        <span className="text-[10px] text-slate-400 ml-1.5">just now</span>
+                      </div>
+                    </div>
+                    {mainPost && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(mainPost);
+                          setCopiedMain(true);
+                          setTimeout(() => setCopiedMain(false), 2000);
+                        }}
+                        className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-all cursor-pointer"
+                        title="Copy main post"
+                      >
+                        {copiedMain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                  </div>
+
+                  <textarea
+                    rows={4}
+                    value={mainPost}
+                    onChange={(e) => setMainPost(e.target.value)}
+                    placeholder="Hasil postingan utama curhat Threads akan muncul di sini setelah kamu klik tombol Generate..."
+                    className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
+                  />
                 </div>
 
-                <textarea
-                  rows={4}
-                  value={replyPost}
-                  onChange={(e) => setReplyPost(e.target.value)}
-                  placeholder="Komentar balasan berisi link afiliasi otomatis akan muncul di sini..."
-                  className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
-                />
-              </div>
-            </div>
+                {/* Post 2: Reply Thread with Link */}
+                <div className="relative pl-6 before:content-[''] before:absolute before:left-3 before:top-0 before:bottom-0 before:w-0.5 before:bg-slate-200">
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white">
+                          U
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-indigo-900">your_username</span>
+                          <span className="text-[10px] text-indigo-500 ml-1.5">Reply #1 (Affiliate Link)</span>
+                        </div>
+                      </div>
+                      {replyPost && (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(replyPost);
+                            setCopiedReply(true);
+                            setTimeout(() => setCopiedReply(false), 2000);
+                          }}
+                          className="p-1.5 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 transition-all cursor-pointer"
+                          title="Copy reply post"
+                        >
+                          {copiedReply ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+
+                    <textarea
+                      rows={4}
+                      value={replyPost}
+                      onChange={(e) => setReplyPost(e.target.value)}
+                      placeholder="Komentar balasan berisi link afiliasi otomatis akan muncul di sini..."
+                      className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 leading-relaxed resize-none outline-none border-0 p-0 focus:ring-0"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Queue & Publish Control Center */}
             <div className="pt-3 border-t border-slate-100 space-y-3">

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productName, category, painPoints, usps, affiliateUrl, tone, productId, saveDraft } = body;
+    const { productName, category, painPoints, usps, affiliateUrl, tone, threadLength, productId, saveDraft } = body;
 
     if (!productName) {
       return NextResponse.json(
@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       usps,
       affiliateUrl,
       tone,
+      threadLength: threadLength ? parseInt(threadLength) : 1,
     });
 
     let draftId: string | undefined;

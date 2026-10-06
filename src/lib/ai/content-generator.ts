@@ -8,6 +8,7 @@ export interface AIContentRequest {
   usps?: string;
   affiliateUrl?: string;
   tone?: "CASUAL_CURHAT" | "VIRAL_STORY" | "PROBLEM_SOLVER" | "HONEST_REVIEW" | "URGENT_DEAL";
+  threadLength?: number; // 1 for single reply, or 5, 7, 10 for multi-reply storytelling
   targetPlatform?: "THREADS" | "TWITTER" | "INSTAGRAM";
   apiKey?: string;
   provider?: "gemini" | "openai";
@@ -16,6 +17,7 @@ export interface AIContentRequest {
 export interface AIContentResponse {
   mainPost: string;
   replyPost: string;
+  threadPosts?: string[]; // Array of chained posts: [Post #1, Reply #1, Reply #2, ..., Final Link Reply]
   characterCount: number;
   modelUsed: string;
 }
@@ -24,33 +26,18 @@ const TONE_PROMPTS: Record<string, string> = {
   CASUAL_CURHAT: `
 Gaya: Soft-selling curhat Threads santai sehari-hari.
 Sudut pandang: Orang pertama ("aku").
-Struktur:
-1. Postingan Utama: Awali dengan keresahan/kebiasaan sepele atau momen relatable. Ceritakan bagaimana produk ini jadi solusi praktis (maksimal 350 karakter).
-2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Tulis dengan kalimat yang LEBIH PANJANG, LENGKAP, dan BERBOBOT (2-4 kalimat natural). Jelaskan detail tambahan seperti kenapa beli di toko official ini, info bonus/promo gratis ongkir, tips klaim voucher toko, jaminan barang original, serta ajakan klik link ${'{link_afiliasi}'} yang ramah dan solutif.
 `,
   VIRAL_STORY: `
 Gaya: Hook kuat, storytelling cepat, dan emosional/penasaran.
-Struktur:
-1. Postingan Utama: Hook dramatis dan cerita perubahan sebelum vs sesudah (maksimal 350 karakter).
-2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Kalimat panjang dan meyakinkan (2-4 kalimat). Cantumkan spill link official ${'{link_afiliasi}'}, review singkat pengiriman/packing, peringatan agar tidak tergiur produk palsu murah, dan ajakan checkout mumpung stok promo masih ada.
 `,
   PROBLEM_SOLVER: `
 Gaya: Problem-Agitate-Solution to-the-point.
-Struktur:
-1. Postingan Utama: Bedah masalah teknis/harian dan solusinya (maksimal 320 karakter).
-2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Rekomendasi mendalam (2-3 kalimat) mengenai alasan memilih varian/produk ini dibanding alternatif lain, garansi kualitas, serta link pembelian resmi ${'{link_afiliasi}'}.
 `,
   HONEST_REVIEW: `
 Gaya: Review jujur setelah pemakaian rutin. Highlight plus & minus santai.
-Struktur:
-1. Postingan Utama: Ulasan objektif hasil pemakaian (maksimal 350 karakter).
-2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Ulasan lanjutan yang informatif (2-4 kalimat) mengenai detail material, toko resmi tempat beli dengan rating bintang 5, tips pemakaian harian, dan link checkout ${'{link_afiliasi}'}.
 `,
   URGENT_DEAL: `
 Gaya: Info diskon/promo kilat tanpa terlihat spammy.
-Struktur:
-1. Postingan Utama: Highlight promo spesial, voucher terbatas, atau bundling menarik (maksimal 300 karakter).
-2. Postingan Balasan (Reply #1 dengan Link Afiliasi): Penjelasan detail promo (2-3 kalimat) mengenai cara dapat gratis ongkir ekstra, batas waktu diskon, dan link checkout langsung ${'{link_afiliasi}'}.
 `,
 };
 
@@ -58,8 +45,31 @@ export async function generateSocialContent(req: AIContentRequest): Promise<AICo
   const tone = req.tone || "CASUAL_CURHAT";
   const toneGuideline = TONE_PROMPTS[tone] || TONE_PROMPTS.CASUAL_CURHAT;
   const affiliateLink = req.affiliateUrl || "{link_afiliasi}";
+  const threadCount = req.threadLength && req.threadLength > 1 ? req.threadLength : 1;
 
-  const systemInstruction = `Kamu adalah copywriter profesional spesialis social media marketing & affiliate conversion untuk platform Threads dan Twitter/X.
+  const isMultiThread = threadCount >= 3;
+
+  const systemInstruction = isMultiThread
+    ? `Kamu adalah copywriter Threads & Twitter/X spesialis "Mega-Thread Storytelling Berantai" (Utas Panjang ${threadCount} Postingan).
+Tugasmu: Menulis sebuah cerita/curhat berantai sebanyak PERSIS ${threadCount} postingan yang bersambung dari awal sampai akhir.
+
+Struktur ${threadCount} Postingan:
+- Post #1 (Hook Utama): Pembuka yang bikin sangat penasaran, emosional, atau relatable ("Sebuah utas...", "Gak nyangka hal sepele ini...").
+- Post #2 sampai #${threadCount - 1} (Story Arc): Cerita kronologis mendalam (masa sulit/keresahan memuncak -> pencarian solusi & kegagalan coba cara lain -> momen menemukan ${req.productName} -> pengalaman nyata & transformasi positif setelah memakai).
+- Post #${threadCount} (Final Call-to-Action & Affiliate Link): Spill toko official terpercaya, jaminan keaslian/garansi, tips klaim promo/voucher gratis ongkir, dan sematkan link checkout: ${affiliateLink}.
+
+${toneGuideline}
+
+Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown formatting tambahan:
+{
+  "thread_posts": [
+    "Teks Postingan #1 (Hook)",
+    "Teks Postingan #2 (Keresahan mendalam)",
+    ...
+    "Teks Postingan #${threadCount} (Spill toko official & link ${affiliateLink})"
+  ]
+}`
+    : `Kamu adalah copywriter profesional spesialis social media marketing & affiliate conversion untuk platform Threads dan Twitter/X.
 Tugasmu: Menghasilkan konten organik yang natural, sangat menarik, berkonversi tinggi, dan TIDAK kaku.
 
 ATURAN PENTING:
@@ -79,7 +89,8 @@ Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown format
 - Kategori: ${req.category || "General"}
 - Masalah / Pain Points: ${req.painPoints || "Masalah sehari-hari"}
 - Keunggulan / USPs: ${req.usps || "Praktis dan fungsional"}
-- Link Afiliasi: ${affiliateLink}`;
+- Link Afiliasi: ${affiliateLink}
+- Target Panjang Utas: ${threadCount} Postingan Berantai`;
 
   const geminiApiKey = req.apiKey || process.env.GEMINI_API_KEY;
   const openaiApiKey = req.apiKey || process.env.OPENAI_API_KEY;
@@ -101,9 +112,23 @@ Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown format
       const responseText = result.response.text();
       const parsed = JSON.parse(responseText);
 
+      if (isMultiThread && Array.isArray(parsed.thread_posts) && parsed.thread_posts.length > 0) {
+        const posts: string[] = parsed.thread_posts;
+        const mainPost = posts[0] || "";
+        const replyPost = posts.slice(1).join("\n\n---\n\n");
+        return {
+          mainPost,
+          replyPost,
+          threadPosts: posts,
+          characterCount: mainPost.length,
+          modelUsed: "gemini-1.5-flash",
+        };
+      }
+
       return {
-        mainPost: parsed.post_utama,
-        replyPost: parsed.post_balasan,
+        mainPost: parsed.post_utama || "",
+        replyPost: parsed.post_balasan || "",
+        threadPosts: [parsed.post_utama, parsed.post_balasan].filter(Boolean),
         characterCount: (parsed.post_utama || "").length,
         modelUsed: "gemini-1.5-flash",
       };
@@ -129,9 +154,23 @@ Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown format
       const content = completion.choices[0]?.message?.content;
       if (content) {
         const parsed = JSON.parse(content);
+        if (isMultiThread && Array.isArray(parsed.thread_posts) && parsed.thread_posts.length > 0) {
+          const posts: string[] = parsed.thread_posts;
+          const mainPost = posts[0] || "";
+          const replyPost = posts.slice(1).join("\n\n---\n\n");
+          return {
+            mainPost,
+            replyPost,
+            threadPosts: posts,
+            characterCount: mainPost.length,
+            modelUsed: "gpt-4o-mini",
+          };
+        }
+
         return {
-          mainPost: parsed.post_utama,
-          replyPost: parsed.post_balasan,
+          mainPost: parsed.post_utama || "",
+          replyPost: parsed.post_balasan || "",
+          threadPosts: [parsed.post_utama, parsed.post_balasan].filter(Boolean),
           characterCount: (parsed.post_utama || "").length,
           modelUsed: "gpt-4o-mini",
         };
@@ -234,6 +273,78 @@ function generateFallbackContent(req: AIContentRequest): AIContentResponse {
   const link = req.affiliateUrl || "{link_afiliasi}";
   const pain = req.painPoints || "sering kerepotan dengan urusan harian";
   const usp = req.usps || "kualitasnya premium dan fungsional banget";
+  const threadCount = req.threadLength && req.threadLength > 1 ? req.threadLength : 1;
+
+  if (threadCount >= 3) {
+    const threadPosts: string[] = [];
+
+    // Part 1: Hook Pembuka
+    threadPosts.push(
+      `[1/${threadCount}] Sebuah utas singkat: Gak nyangka masalah sepele kayak ${pain} yang udah bikin pusing berbulan-bulan ternyata solusinya sesimpel ini. Simak ceritanya sampai akhir, siapa tahu kalian ngalamin hal yang sama 👇`
+    );
+
+    // Part 2: Background / Keresahan Awal
+    threadPosts.push(
+      `[2/${threadCount}] Jadi awalnya aku kira masalah ini wajar dialami semua orang. Tiap hari selalu berulang, capek sendiri, dan ngerasa buang waktu banget. Sampai di titik ngerasa harus cari solusi biar gak stres terus.`
+    );
+
+    // Part 3: Percobaan & Kegagalan
+    threadPosts.push(
+      `[3/${threadCount}] Sebelum nemu solusi yang pas, aku udah sempat coba beberapa opsi lain yang harganya murah tapi ujung-ujungnya zonk dan cepat rusak. Malah buang-buang uang dua kali.`
+    );
+
+    // Part 4: Momen Penemuan
+    threadPosts.push(
+      `[4/${threadCount}] Sampai akhirnya beberapa waktu lalu gak sengaja nemu rekomendasi tentang ${req.productName}. Awalnya skeptis, tapi pas baca ulasan orang-orang yang bilang ${usp}, aku beraniin buat checkout.`
+    );
+
+    if (threadCount >= 7) {
+      // Part 5: Unboxing & First Impression
+      threadPosts.push(
+        `[5/${threadCount}] Pas barangnya sampai, first impression-nya beneran di luar ekspektasi. Materialnya kokoh, finishing rapi, dan semua kelengkapannya dikirim lengkap tanpa cacat.`
+      );
+      // Part 6: Real Life Testing
+      threadPosts.push(
+        `[6/${threadCount}] Pas dicoba pakai buat aktivitas harian, efeknya langsung berasa. Masalah ${pain} yang tadinya bikin ribet, sekarang kelar dalam hitungan menit. Hidup jadi jauh lebih praktis.`
+      );
+    }
+
+    if (threadCount >= 10) {
+      // Part 7: Comparison & Value
+      threadPosts.push(
+        `[7/${threadCount}] Kalau dihitung-hitung secara value, ini jauh lebih hemat dibanding beli barang murah yang bolak-balik rusak. Investasi kecil tapi manfaatnya berasa tiap hari.`
+      );
+      // Part 8: Feedback Lingkungan
+      threadPosts.push(
+        `[8/${threadCount}] Bahkan teman-teman yang sempat main dan nyobain juga pada nanya beli di mana karena mereka ngerasain sendiri kepraktisannya.`
+      );
+      // Part 9: Insight & Tips
+      threadPosts.push(
+        `[9/${threadCount}] Pelajaran pentingnya: untuk kebutuhan esensial, jangan ragu pilih yang berkualitas. Beneran bikin mood dan produktivitas harian meningkat drastis.`
+      );
+    }
+
+    // Final Post: Call to Action & Affiliate Link
+    threadPosts.push(
+      `[${threadCount}/${threadCount}] Buat yang nanya spill link toko officialnya: aku checkout di toko resmi yang ini ya. Packing aman, garansi original 100%, dan lagi ada promo gratis ongkir + diskon voucher. Langsung cek di sini sebelum kehabisan 👉 ${link}`
+    );
+
+    // Adjust numbering in case threadCount was custom
+    const finalPosts = threadPosts.slice(0, threadCount);
+    // Ensure the last one always has the affiliate link
+    finalPosts[finalPosts.length - 1] = `[${finalPosts.length}/${finalPosts.length}] Buat yang nanya spill link toko officialnya: aku checkout di toko resmi yang ini ya. Packing aman, garansi original 100%, dan lagi ada promo gratis ongkir + diskon voucher. Langsung cek di sini sebelum kehabisan 👉 ${link}`;
+
+    const mainPost = finalPosts[0];
+    const replyPost = finalPosts.slice(1).join("\n\n---\n\n");
+
+    return {
+      mainPost,
+      replyPost,
+      threadPosts: finalPosts,
+      characterCount: mainPost.length,
+      modelUsed: "smart-storytelling-engine-v1",
+    };
+  }
 
   let mainPost = "";
   let replyPost = "";
@@ -259,6 +370,7 @@ function generateFallbackContent(req: AIContentRequest): AIContentResponse {
   return {
     mainPost,
     replyPost,
+    threadPosts: [mainPost, replyPost],
     characterCount: mainPost.length,
     modelUsed: "smart-template-engine-v1",
   };

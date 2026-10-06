@@ -105,37 +105,55 @@ async function publishToThreads(payload: PublishPayload): Promise<PublishResult>
     }
 
     const publishedMainId = publishData.id;
+    let lastPublishedId = publishedMainId;
     let publishedReplyId: string | undefined;
 
-    // 3. Publish Reply Post (if exists)
+    // 3. Publish Reply Post(s) in Sequence (Chained Thread)
     if (replyContent && replyContent.trim().length > 0) {
-      // Create Reply Container
-      const replyContainerParams = new URLSearchParams({
-        media_type: "TEXT",
-        text: replyContent,
-        reply_to_id: publishedMainId,
-        access_token: accessToken,
-      });
+      // Split by multi-part delimiter or treat as single reply
+      const replyParts = replyContent
+        .split(/\n\s*---\s*\n/)
+        .map((p) => p.trim())
+        .filter(Boolean);
 
-      const { ok: replyContainerOk, data: replyContainerData } = await postMetaEndpoint(
-        mainContainerUrl,
-        replyContainerParams
-      );
+      for (let i = 0; i < replyParts.length; i++) {
+        const partText = replyParts[i];
+        if (!partText) continue;
 
-      if (replyContainerOk && replyContainerData?.id) {
-        // Publish Reply
-        const publishReplyParams = new URLSearchParams({
-          creation_id: replyContainerData.id,
+        // Small delay between chained posts to respect platform rate limit
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 600));
+        }
+
+        const replyContainerParams = new URLSearchParams({
+          media_type: "TEXT",
+          text: partText,
+          reply_to_id: lastPublishedId,
           access_token: accessToken,
         });
 
-        const { ok: replyPublishOk, data: publishReplyData } = await postMetaEndpoint(
-          publishUrl,
-          publishReplyParams
+        const { ok: replyContainerOk, data: replyContainerData } = await postMetaEndpoint(
+          mainContainerUrl,
+          replyContainerParams
         );
 
-        if (replyPublishOk && publishReplyData?.id) {
-          publishedReplyId = publishReplyData.id;
+        if (replyContainerOk && replyContainerData?.id) {
+          const publishReplyParams = new URLSearchParams({
+            creation_id: replyContainerData.id,
+            access_token: accessToken,
+          });
+
+          const { ok: replyPublishOk, data: publishReplyData } = await postMetaEndpoint(
+            publishUrl,
+            publishReplyParams
+          );
+
+          if (replyPublishOk && publishReplyData?.id) {
+            lastPublishedId = publishReplyData.id;
+            if (!publishedReplyId) {
+              publishedReplyId = publishReplyData.id;
+            }
+          }
         }
       }
     }
@@ -144,7 +162,7 @@ async function publishToThreads(payload: PublishPayload): Promise<PublishResult>
       success: true,
       externalMainId: publishedMainId,
       externalReplyId: publishedReplyId,
-      details: { platform: "THREADS", main: publishData },
+      details: { platform: "THREADS", main: publishData, lastId: lastPublishedId },
     };
   } catch (err: any) {
     return {
@@ -181,32 +199,50 @@ async function publishToTwitter(payload: PublishPayload): Promise<PublishResult>
     }
 
     const mainTweetId = tweetData.data.id;
-    let replyTweetId: string | undefined;
+    let lastTweetId = mainTweetId;
+    let firstReplyId: string | undefined;
 
-    // Post Reply Tweet
+    // Post Reply Tweet(s)
     if (replyContent && replyContent.trim().length > 0) {
-      const replyRes = await fetch("https://api.twitter.com/2/tweets", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: replyContent,
-          reply: { in_reply_to_tweet_id: mainTweetId },
-        }),
-      });
+      const replyParts = replyContent
+        .split(/\n\s*---\s*\n/)
+        .map((p) => p.trim())
+        .filter(Boolean);
 
-      const replyData = await replyRes.json();
-      if (replyRes.ok && replyData.data?.id) {
-        replyTweetId = replyData.data.id;
+      for (let i = 0; i < replyParts.length; i++) {
+        const partText = replyParts[i];
+        if (!partText) continue;
+
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 600));
+        }
+
+        const replyRes = await fetch("https://api.twitter.com/2/tweets", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: partText,
+            reply: { in_reply_to_tweet_id: lastTweetId },
+          }),
+        });
+
+        const replyData = await replyRes.json();
+        if (replyRes.ok && replyData.data?.id) {
+          lastTweetId = replyData.data.id;
+          if (!firstReplyId) {
+            firstReplyId = replyData.data.id;
+          }
+        }
       }
     }
 
     return {
       success: true,
       externalMainId: mainTweetId,
-      externalReplyId: replyTweetId,
+      externalReplyId: firstReplyId,
       details: { platform: "TWITTER", tweetData },
     };
   } catch (err: any) {
