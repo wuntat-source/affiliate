@@ -20,10 +20,12 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: accounts });
     } catch {
-      // Strictly isolate by current user
-      const filtered = mockStore.accounts.filter(
-        (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId
-      );
+      // Admin sees all accounts; Members only see their own
+      const filtered = userCtx.isAdmin
+        ? mockStore.accounts
+        : mockStore.accounts.filter(
+            (a) => (a.userId || "usr_admin_kenzie") === userCtx.userId
+          );
       return NextResponse.json({ success: true, data: filtered });
     }
   } catch (error: any) {
@@ -81,7 +83,7 @@ export async function POST(request: NextRequest) {
         (a) =>
           a.platform === platform &&
           a.username === username &&
-          (a.userId || "usr_admin_kenzie") === userCtx.userId
+          (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
       );
 
       if (existing) {
@@ -132,7 +134,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true });
     } catch {
       const index = mockStore.accounts.findIndex(
-        (a) => a.id === id && (a.userId || "usr_admin_kenzie") === userCtx.userId
+        (a) => a.id === id && (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
       );
       if (index !== -1) {
         mockStore.accounts.splice(index, 1);

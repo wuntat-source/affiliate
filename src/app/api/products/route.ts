@@ -36,10 +36,12 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: products });
     } catch {
-      // Strictly isolate by current user
-      let filtered = mockStore.products.filter(
-        (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
-      );
+      // Admin can see all products across all users; Members only see their own
+      let filtered = userCtx.isAdmin
+        ? mockStore.products
+        : mockStore.products.filter(
+            (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+          );
 
       if (search) {
         filtered = filtered.filter(
@@ -132,13 +134,14 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true });
     } catch {
       const index = mockStore.products.findIndex(
-        (p) => p.id === id && (p.userId || "usr_admin_kenzie") === userCtx.userId
+        (p) => p.id === id && (userCtx.isAdmin || (p.userId || "usr_admin_kenzie") === userCtx.userId)
       );
       if (index !== -1) {
+        const prod = mockStore.products[index];
         mockStore.products.splice(index, 1);
         // Also remove associated links
         mockStore.links = mockStore.links.filter(
-          (l) => l.productId !== id && (l.userId || "usr_admin_kenzie") === userCtx.userId
+          (l) => l.productId !== id
         );
         saveStoreToDisk();
       }

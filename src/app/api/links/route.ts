@@ -20,10 +20,12 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: links });
     } catch {
-      // Strictly isolate by current user
-      const filtered = mockStore.links.filter(
-        (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
-      );
+      // Admin sees all links; Members only see their own
+      const filtered = userCtx.isAdmin
+        ? mockStore.links
+        : mockStore.links.filter(
+            (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
+          );
       return NextResponse.json({ success: true, data: filtered });
     }
   } catch (error: any) {
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
     } catch {
       const shortCode = customSlug?.trim() || nanoid(7);
       const product = mockStore.products.find(
-        (p) => p.id === productId && (p.userId || "usr_admin_kenzie") === userCtx.userId
+        (p) => p.id === productId && (userCtx.isAdmin || (p.userId || "usr_admin_kenzie") === userCtx.userId)
       ) || {
         id: productId,
         name: "Produk Affiliate",
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
 
       // Attach link to product object
       const targetProd = mockStore.products.find(
-        (p) => p.id === productId && (p.userId || "usr_admin_kenzie") === userCtx.userId
+        (p) => p.id === productId
       );
       if (targetProd) {
         if (!targetProd.affiliateLinks) targetProd.affiliateLinks = [];
@@ -128,7 +130,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true });
     } catch {
       const index = mockStore.links.findIndex(
-        (l) => l.id === id && (l.userId || "usr_admin_kenzie") === userCtx.userId
+        (l) => l.id === id && (userCtx.isAdmin || (l.userId || "usr_admin_kenzie") === userCtx.userId)
       );
       if (index !== -1) {
         const deletedLink = mockStore.links[index];

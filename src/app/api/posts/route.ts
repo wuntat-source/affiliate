@@ -26,10 +26,12 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: posts });
     } catch {
-      // Strictly isolate by current user
-      let filtered = mockStore.posts.filter(
-        (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
-      );
+      // Admin sees all posts; Members only see their own
+      let filtered = userCtx.isAdmin
+        ? mockStore.posts
+        : mockStore.posts.filter(
+            (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+          );
 
       if (status) {
         filtered = filtered.filter((p) => p.status === status);
@@ -83,14 +85,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: post });
     } catch {
       const account = mockStore.accounts.find(
-        (a) => a.id === accountId && (a.userId || "usr_admin_kenzie") === userCtx.userId
+        (a) => a.id === accountId && (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
       ) || {
         platform: "THREADS",
         username: "curhat_gadget_daily",
       };
       const product = productId
         ? mockStore.products.find(
-            (p) => p.id === productId && (p.userId || "usr_admin_kenzie") === userCtx.userId
+            (p) => p.id === productId && (userCtx.isAdmin || (p.userId || "usr_admin_kenzie") === userCtx.userId)
           )
         : undefined;
 
