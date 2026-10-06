@@ -10,18 +10,19 @@ export async function POST(request: NextRequest) {
   try {
     const userCtx = getUserContext(request);
     const body = await request.json();
-    const { platform = "THREADS", username = "", sessionId = "" } = body;
+    const { platform = "THREADS", username = "", sessionId = "", cookieString = "" } = body;
+
+    const rawInput = (sessionId || cookieString || "").trim();
 
     if (!username.trim()) {
-      return NextResponse.json({ error: "Username akun wajib diisi." }, { status: 400 });
+      return NextResponse.json({ error: "Username akun Threads wajib diisi." }, { status: 400 });
     }
 
-    if (!sessionId.trim()) {
-      return NextResponse.json({ error: "Session ID / Cookie wajib diisi." }, { status: 400 });
+    if (!rawInput) {
+      return NextResponse.json({ error: "Nilai cookie / sessionid wajib diisi." }, { status: 400 });
     }
 
     const cleanUsername = username.trim().replace(/^@/, "");
-    const cleanSessionId = sessionId.trim().replace(/^sessionid=/, "");
     const statePath = getStateJsonPath(platform, cleanUsername);
 
     const dir = path.dirname(statePath);
@@ -29,41 +30,69 @@ export async function POST(request: NextRequest) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
+    // Extract sessionid, ds_user_id, csrftoken from any string format
+    let cleanSessionId = rawInput;
+    let dsUserId = "";
+    let csrfToken = "";
+
+    // If pasted full cookie header (e.g. sessionid=...; ds_user_id=...)
+    if (rawInput.includes("=") || rawInput.includes(";")) {
+      const parts = rawInput.split(";");
+      for (const part of parts) {
+        const [k, ...v] = part.trim().split("=");
+        const val = v.join("=");
+        if (k.toLowerCase() === "sessionid") cleanSessionId = decodeURIComponent(val);
+        if (k.toLowerCase() === "ds_user_id") dsUserId = decodeURIComponent(val);
+        if (k.toLowerCase() === "csrftoken") csrfToken = decodeURIComponent(val);
+      }
+    }
+
+    cleanSessionId = cleanSessionId.replace(/^sessionid=/i, "").trim();
+
     const nowSeconds = Math.floor(Date.now() / 1000);
     const oneYearLater = nowSeconds + 365 * 24 * 3600;
 
-    const cookies = [
-      {
+    const domains = [".threads.net", ".threads.com", ".instagram.com"];
+    const cookies: any[] = [];
+
+    for (const dom of domains) {
+      cookies.push({
         name: "sessionid",
         value: cleanSessionId,
-        domain: ".threads.net",
+        domain: dom,
         path: "/",
         expires: oneYearLater,
         httpOnly: true,
         secure: true,
         sameSite: "None",
-      },
-      {
-        name: "sessionid",
-        value: cleanSessionId,
-        domain: ".threads.com",
-        path: "/",
-        expires: oneYearLater,
-        httpOnly: true,
-        secure: true,
-        sameSite: "None",
-      },
-      {
-        name: "sessionid",
-        value: cleanSessionId,
-        domain: ".instagram.com",
-        path: "/",
-        expires: oneYearLater,
-        httpOnly: true,
-        secure: true,
-        sameSite: "None",
-      },
-    ];
+      });
+
+      if (dsUserId) {
+        cookies.push({
+          name: "ds_user_id",
+          value: dsUserId,
+          domain: dom,
+          path: "/",
+          expires: oneYearLater,
+          httpOnly: false,
+          secure: true,
+          sameSite: "None",
+        });
+      }
+
+      if (csrfToken) {
+        cookies.push({
+          name: "csrftoken",
+          value: csrfToken,
+          domain: dom,
+          path: "/",
+          expires: oneYearLater,
+          httpOnly: false,
+          secure: true,
+          sameSite: "None",
+        });
+      }
+    }
 
     const storageData = {
       cookies,
@@ -79,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     fs.writeFileSync(statePath, JSON.stringify(storageData, null, 2));
 
-    // Also write login_status.json for consistency
+    // Write login status
     const statusPath = path.join(dir, "login_status.json");
     fs.writeFileSync(
       statusPath,

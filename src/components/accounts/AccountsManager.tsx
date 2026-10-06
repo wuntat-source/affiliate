@@ -18,6 +18,7 @@ import {
   Key,
   ChevronDown,
   ChevronUp,
+  Server,
 } from "lucide-react";
 import { getAuthHeaders } from "@/lib/auth";
 
@@ -55,8 +56,11 @@ export const AccountsManager: React.FC = () => {
   const [isSandbox, setIsSandbox] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Connection mode: COOKIE (default, perfect for VPS & Local) vs BROWSER (GUI)
+  const [connectionMode, setConnectionMode] = useState<"COOKIE" | "BROWSER">("COOKIE");
+
   // Playwright Browser Login states
-  const [browserUsername, setBrowserUsername] = useState("");
+  const [browserUsername, setBrowserUsername] = useState("pintulangitketujuh");
   const [browserPlatform, setBrowserPlatform] = useState<"THREADS" | "TWITTER">("THREADS");
   const [browserLoading, setBrowserLoading] = useState(false);
   const [browserWindowOpen, setBrowserWindowOpen] = useState(false);
@@ -64,7 +68,6 @@ export const AccountsManager: React.FC = () => {
   const [browserFeedback, setBrowserFeedback] = useState<{ success: boolean; msg: string } | null>(null);
 
   // Manual Cookie Import state
-  const [showManualCookie, setShowManualCookie] = useState(false);
   const [manualSessionId, setManualSessionId] = useState("");
   const [savingCookie, setSavingCookie] = useState(false);
 
@@ -131,7 +134,7 @@ export const AccountsManager: React.FC = () => {
         });
       } else {
         if (data.isHeadlessServer) {
-          setShowManualCookie(true);
+          setConnectionMode("COOKIE");
         }
         setBrowserFeedback({
           success: false,
@@ -186,11 +189,21 @@ export const AccountsManager: React.FC = () => {
     }
   }
 
-  async function handleSaveManualCookie() {
-    if (!browserUsername.trim() || !manualSessionId.trim()) {
+  async function handleSaveManualCookie(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+
+    if (!browserUsername.trim()) {
       setBrowserFeedback({
         success: false,
-        msg: "Harap masukkan username Threads dan nilai cookie sessionid!",
+        msg: "Harap masukkan username Threads (misal: pintulangitketujuh)!",
+      });
+      return;
+    }
+
+    if (!manualSessionId.trim()) {
+      setBrowserFeedback({
+        success: false,
+        msg: "Harap masukkan nilai cookie sessionid atau seluruh cookie string!",
       });
       return;
     }
@@ -213,11 +226,10 @@ export const AccountsManager: React.FC = () => {
       if (data.success) {
         setBrowserFeedback({
           success: true,
-          msg: data.message || "Cookie sesi berhasil disimpan dan akun langsung aktif!",
+          msg: data.message || "✅ Cookie sesi berhasil disimpan dan akun langsung aktif!",
         });
         setManualSessionId("");
-        setShowManualCookie(false);
-        loadAccounts();
+        await loadAccounts();
       } else {
         setBrowserFeedback({
           success: false,
@@ -239,7 +251,7 @@ export const AccountsManager: React.FC = () => {
       const res = await fetch("/api/accounts", { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success) {
-        setAccounts(data.data);
+        setAccounts(data.data || []);
       }
     } catch (e) {
       console.error(e);
@@ -305,7 +317,6 @@ export const AccountsManager: React.FC = () => {
         setShowAddModal(false);
         setUsername("");
         setAccountName("");
-        setIsSandbox(true);
         loadAccounts();
       }
     } catch (e) {
@@ -316,10 +327,7 @@ export const AccountsManager: React.FC = () => {
   }
 
   async function handleDeleteAccount(id: string) {
-    if (!confirm("Apakah kamu yakin ingin memutuskan/menghapus akun sosial ini?")) {
-      return;
-    }
-
+    if (!confirm("Apakah Anda yakin ingin memutuskan / menghapus akun ini?")) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/accounts?id=${id}`, {
@@ -347,181 +355,236 @@ export const AccountsManager: React.FC = () => {
             Social Media Accounts (Threads, X / Twitter)
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Hubungkan akun Threads kamu langsung via Browser Automation (Playwright) atau gunakan Sandbox Mode tanpa API Token.
+            Hubungkan akun Threads Anda untuk posting otomatis dengan AI. Mendukung server VPS dan komputer lokal.
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          + Tambah Akun Manual / Sandbox
-        </button>
-      </div>
-
-      {/* Playwright Chromium Browser Login Card */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-900/5 via-violet-900/5 to-purple-900/5 border border-indigo-200/60 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <Laptop className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900">
-                  Login Threads via Browser Chromium
-                </h3>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                  Bypass Token API
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 mt-0.5 max-w-xl">
-                Ketik username Threads Anda, klik tombol buka browser, lalu login di jendela Chromium yang muncul. Sesi tersimpan permanen di komputer ini untuk auto-posting.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <div className="flex-1 min-w-[200px] max-w-xs">
-            <input
-              type="text"
-              value={browserUsername}
-              onChange={(e) => setBrowserUsername(e.target.value)}
-              placeholder="Username Threads (misal: pintulangitketujuh)"
-              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono shadow-2xs"
-            />
-          </div>
-
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleLaunchBrowserLogin}
-            disabled={browserLoading || browserWindowOpen}
-            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            onClick={() => {
+              setLoading(true);
+              loadAccounts();
+            }}
+            className="px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+            title="Refresh Akun"
           >
-            {browserLoading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Membuka Jendela Chromium...
-              </>
-            ) : browserWindowOpen ? (
-              <>
-                <Globe className="w-4 h-4 text-emerald-400" />
-                Jendela Browser Terbuka
-              </>
-            ) : (
-              <>
-                <Globe className="w-4 h-4 text-indigo-400" />
-                Buka Browser Login Threads
-                <ExternalLink className="w-3 h-3 text-slate-400" />
-              </>
-            )}
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
           </button>
 
-          {browserWindowOpen && (
-            <button
-              onClick={handleVerifySession}
-              disabled={verifyingSession}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 animate-pulse"
-            >
-              {verifyingSession ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Memeriksa Sesi Login...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4" />
-                  Selesai Login & Simpan Sesi
-                </>
-              )}
-            </button>
-          )}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            + Tambah Manual / Sandbox
+          </button>
         </div>
+      </div>
 
-        {/* Step Guide if Browser is Open */}
-        {browserWindowOpen && (
-          <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 space-y-1">
-            <p className="font-semibold flex items-center gap-1.5 text-indigo-950">
-              <Laptop className="w-4 h-4 text-indigo-600" />
-              Jendela Google Chrome / Browser telah dibuka di layar Anda!
-            </p>
-            <p className="text-[11px] text-indigo-800">
-              1. Beralih ke jendela browser baru yang muncul di desktop atau taskbar Windows Anda.<br />
-              2. Masukkan username & password akun Threads Anda.<br />
-              3. Setelah berhasil masuk ke beranda Threads, klik tombol hijau <strong>&quot;Selesai Login &amp; Simpan Sesi&quot;</strong> di atas.
-            </p>
-          </div>
-        )}
-
-        <div className="text-[11px] text-slate-500 flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100">
-          <div className="flex items-center gap-1.5">
-            <Laptop className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <span>
-              <strong>Opsi Alternatif:</strong> Buka Windows Explorer dan klik ganda <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono text-[10px]">login-threads.bat</code>.
-            </span>
-          </div>
+      {/* Main Connection Box with Mode Switcher */}
+      <div className="rounded-2xl bg-white border border-slate-200/90 shadow-xs overflow-hidden">
+        {/* Tab Selector */}
+        <div className="flex border-b border-slate-100 bg-slate-50/70 p-1.5 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setConnectionMode("COOKIE")}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              connectionMode === "COOKIE"
+                ? "bg-white text-indigo-700 shadow-xs border border-slate-200/70"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/50"
+            }`}
+          >
+            <Key className="w-4 h-4 text-indigo-600" />
+            <span>Metode 1: Tempel Cookie <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold ml-1">Rekomendasi VPS / Server</span></span>
+          </button>
 
           <button
             type="button"
-            onClick={() => setShowManualCookie(!showManualCookie)}
-            className="text-indigo-600 hover:text-indigo-800 font-semibold text-[11px] flex items-center gap-1 cursor-pointer"
+            onClick={() => setConnectionMode("BROWSER")}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              connectionMode === "BROWSER"
+                ? "bg-white text-indigo-700 shadow-xs border border-slate-200/70"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/50"
+            }`}
           >
-            <Key className="w-3.5 h-3.5" />
-            <span>{showManualCookie ? "Sembunyikan Input Cookie" : "Tempel Cookie sessionid Langsung (Instan)"}</span>
-            {showManualCookie ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            <Laptop className="w-4 h-4 text-indigo-600" />
+            <span>Metode 2: Buka Browser Otomatis <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold ml-1">Laptop / Windows Lokal</span></span>
           </button>
         </div>
 
-        {/* Manual Cookie Input Box */}
-        {showManualCookie && (
-          <div className="p-4 rounded-xl bg-white border border-indigo-200 space-y-3 shadow-2xs animate-fadeIn">
-            <div className="flex items-start gap-2">
-              <Key className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-xs font-bold text-slate-900">Tempel Cookie Sesi (sessionid)</h4>
-                <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
-                  Jika Anda sudah login Threads di browser utama Anda: Tekan <strong>F12</strong> pada tab Threads Anda &rarr; Klik tab <strong>Application</strong> &rarr; <strong>Cookies</strong> &rarr; <code className="bg-slate-100 px-1 rounded font-mono">https://www.threads.net</code> &rarr; Klik ganda dan salin nilai <strong>sessionid</strong> &rarr; Tempel di bawah ini:
-                </p>
-              </div>
+        {/* Tab 1: Cookie Input (VPS / Direct) */}
+        {connectionMode === "COOKIE" && (
+          <div className="p-5 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Server className="w-4 h-4 text-indigo-600" />
+                Hubungkan Akun Threads via Cookie sessionid (Instan &amp; Tanpa Layar GUI)
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Cocok untuk server VPS Linux, Docker, atau komputer lokal. Cukup salin cookie <code className="bg-slate-100 text-indigo-700 font-mono font-bold px-1.5 py-0.5 rounded">sessionid</code> dari browser Anda, akun langsung terhubung dan aktif permanen.
+              </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={manualSessionId}
-                onChange={(e) => setManualSessionId(e.target.value)}
-                placeholder="Contoh: 78192381290%3AsK12... atau tempel langsung value sessionid di sini"
-                className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono"
-              />
-              <button
-                type="button"
-                onClick={handleSaveManualCookie}
-                disabled={savingCookie}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
-              >
-                {savingCookie ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    Menyimpan Sesi...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    Simpan Sesi Cookie
-                  </>
-                )}
-              </button>
+            {/* Quick 3-Step Guide */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-1.5">
+              <p className="font-bold text-slate-900 text-[11px] uppercase tracking-wider">
+                Cara Mengambil Cookie sessionid (Hanya 10 Detik):
+              </p>
+              <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-600">
+                <li>Buka <a href="https://www.threads.net" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-semibold">https://www.threads.net</a> di Google Chrome laptop Anda dan pastikan sudah login.</li>
+                <li>Tekan tombol <kbd className="bg-white px-1.5 py-0.5 rounded border border-slate-300 font-mono text-[10px] font-bold text-slate-800">F12</kbd> &rarr; Buka tab <strong>Application</strong> (atau <strong>Storage</strong> di Firefox).</li>
+                <li>Di menu kiri klik <strong>Cookies</strong> &rarr; <code className="bg-white px-1 rounded font-mono text-[10px]">https://www.threads.net</code> &rarr; Salin nilai kolom <strong>sessionid</strong>.</li>
+              </ol>
             </div>
+
+            <form onSubmit={handleSaveManualCookie} className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Username Threads *
+                  </label>
+                  <input
+                    type="text"
+                    value={browserUsername}
+                    onChange={(e) => setBrowserUsername(e.target.value)}
+                    placeholder="misal: pintulangitketujuh"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Nilai Cookie sessionid (atau seluruh cookie string) *
+                  </label>
+                  <input
+                    type="text"
+                    value={manualSessionId}
+                    onChange={(e) => setManualSessionId(e.target.value)}
+                    placeholder="Tempel nilai sessionid di sini (contoh: 78192381290%3AsK12...)"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={savingCookie}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {savingCookie ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Menyimpan &amp; Menghubungkan...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Simpan &amp; Aktifkan Akun Threads
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
+        {/* Tab 2: Browser Login (Windows / GUI) */}
+        {connectionMode === "BROWSER" && (
+          <div className="p-5 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Laptop className="w-4 h-4 text-indigo-600" />
+                Login Threads Otomatis via Chromium (Khusus Komputer Lokal Windows)
+              </h3>
+              <p className="text-xs text-slate-600">
+                Ketik username Threads Anda, klik tombol buka browser, lalu lakukan login di jendela browser Chromium yang muncul di desktop Anda.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-[220px] max-w-sm">
+                <input
+                  type="text"
+                  value={browserUsername}
+                  onChange={(e) => setBrowserUsername(e.target.value)}
+                  placeholder="Username Threads (misal: pintulangitketujuh)"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLaunchBrowserLogin}
+                disabled={browserLoading || browserWindowOpen}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                {browserLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Membuka Jendela Chromium...
+                  </>
+                ) : browserWindowOpen ? (
+                  <>
+                    <Globe className="w-4 h-4 text-emerald-400" />
+                    Jendela Browser Terbuka
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-4 h-4 text-indigo-400" />
+                    Buka Browser Login Threads
+                    <ExternalLink className="w-3 h-3 text-slate-400" />
+                  </>
+                )}
+              </button>
+
+              {browserWindowOpen && (
+                <button
+                  type="button"
+                  onClick={handleVerifySession}
+                  disabled={verifyingSession}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 animate-pulse"
+                >
+                  {verifyingSession ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Memeriksa Sesi...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Selesai Login &amp; Simpan Sesi
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {browserWindowOpen && (
+              <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 space-y-1">
+                <p className="font-semibold text-indigo-950">
+                  Jendela Google Chrome / Chromium telah dibuka di desktop Anda:
+                </p>
+                <p className="text-[11px] text-indigo-800">
+                  1. Masuk ke jendela browser baru yang muncul di desktop Anda.<br />
+                  2. Lakukan login ke akun Threads Anda.<br />
+                  3. Setelah masuk ke beranda, klik tombol hijau <strong>&quot;Selesai Login &amp; Simpan Sesi&quot;</strong> di atas.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Feedback Alert */}
         {browserFeedback && (
           <div
-            className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+            className={`p-3.5 mx-5 mb-5 rounded-xl text-xs flex items-center gap-2 ${
               browserFeedback.success
-                ? "bg-emerald-50 text-emerald-850 border border-emerald-200"
-                : "bg-rose-50 text-rose-850 border border-rose-200"
+                ? "bg-emerald-50 text-emerald-900 border border-emerald-200 font-medium"
+                : "bg-rose-50 text-rose-900 border border-rose-200 font-medium"
             }`}
           >
             {browserFeedback.success ? (
@@ -537,14 +600,14 @@ export const AccountsManager: React.FC = () => {
       {/* Accounts Grid */}
       {loading ? (
         <div className="py-12 text-center text-slate-500 text-xs flex items-center justify-center gap-2">
-          <RefreshCw className="w-4 h-4 animate-spin" /> Loading connected accounts...
+          <RefreshCw className="w-4 h-4 animate-spin" /> Memuat daftar akun terhubung...
         </div>
       ) : accounts.length === 0 ? (
         <div className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-white space-y-3">
           <Users className="w-8 h-8 text-slate-300 mx-auto" />
           <p className="text-xs font-semibold text-slate-800">Belum ada akun sosial media yang terhubung</p>
           <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-            Gunakan form di atas untuk login Threads via Playwright Browser atau tambahkan akun Sandbox untuk mulai menjadwalkan auto-posting.
+            Gunakan form di atas (Metode Tempel Cookie atau Buka Browser) untuk menghubungkan akun Threads Anda ke sistem.
           </p>
         </div>
       ) : (
@@ -564,12 +627,12 @@ export const AccountsManager: React.FC = () => {
                   </span>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`flex items-center gap-1 text-[11px] font-semibold ${
+                      className={`flex items-center gap-1 text-[11px] font-bold ${
                         isSandboxAcc ? "text-amber-600" : "text-emerald-600"
                       }`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      {isSandboxAcc ? "SANDBOX" : "BROWSER ACTIVE"}
+                      {isSandboxAcc ? "SANDBOX" : "ACTIVE & TERHUBUNG"}
                     </span>
                     <button
                       onClick={() => handleDeleteAccount(acc.id)}
@@ -583,7 +646,7 @@ export const AccountsManager: React.FC = () => {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">{acc.accountName}</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{acc.accountName || `@${acc.username}`}</h3>
                   <p className="text-xs text-slate-500 font-mono">@{acc.username}</p>
                 </div>
 
@@ -649,77 +712,69 @@ export const AccountsManager: React.FC = () => {
                 <select
                   value={platform}
                   onChange={(e) => setPlatform(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500"
                 >
-                  <option value="THREADS">Threads</option>
-                  <option value="TWITTER">Twitter / X</option>
+                  <option value="THREADS">Threads (Meta)</option>
+                  <option value="TWITTER">X / Twitter</option>
                   <option value="INSTAGRAM">Instagram</option>
-                  <option value="FACEBOOK">Facebook</option>
-                  <option value="TIKTOK">TikTok</option>
+                  <option value="FACEBOOK">Facebook Page</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Username (@handle) *
+                  Username Akun *
                 </label>
                 <input
-                  required
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. adminmbalap"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-mono"
+                  placeholder="Contoh: pintulangitketujuh"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono"
+                  required
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Nama Tampilan Akun (Display Name)
+                  Label / Nama Tampilan Akun (Opsional)
                 </label>
                 <input
                   type="text"
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="e.g. Akun Threads Utama"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500"
+                  placeholder="Contoh: Akun Curhat Gadget"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    Sandbox / Safe Test Mode
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={isSandbox}
-                    onChange={(e) => setIsSandbox(e.target.checked)}
-                    className="rounded text-indigo-600 focus:ring-0 cursor-pointer"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 leading-relaxed">
-                  {isSandbox
-                    ? "Mode aman: simulasi posting tanpa membuka browser Chromium nyata."
-                    : "Mode live: posting otomatis langsung ke akun melalui sesi Browser Chromium."}
-                </p>
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <input
+                  type="checkbox"
+                  id="sandboxMode"
+                  checked={isSandbox}
+                  onChange={(e) => setIsSandbox(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="sandboxMode" className="text-xs text-slate-700 cursor-pointer">
+                  Mode Simulasi / Sandbox (Tanpa Posting Nyata)
+                </label>
               </div>
 
-              <div className="pt-3 flex gap-2 justify-end">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Simpan Akun"}
+                  {saving ? "Menyimpan..." : "Simpan Akun"}
                 </button>
               </div>
             </form>
