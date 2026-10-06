@@ -61,6 +61,7 @@ async function run() {
 
   console.log("🌐 Membuka halaman login Threads di jendela browser...");
   await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
+  await page.bringToFront();
 
   console.log("\n------------------------------------------------------------------");
   console.log(" 👉 SILAKAN LOGIN KE AKUN THREADS ANDA DI JENDELA BROWSER.");
