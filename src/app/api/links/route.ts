@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOrUpdateAffiliateLink } from "@/lib/links/link-service";
-import { mockStore, MockLink } from "@/lib/mock-store";
+import { mockStore, MockLink, saveStoreToDisk } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
- import { nanoid } from "nanoid";
+import { nanoid } from "nanoid";
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,13 +20,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: links });
     } catch {
-      let filtered = mockStore.links;
-      if (!userCtx.isAdmin) {
-        filtered = filtered.filter(
-          (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
-        );
-      }
-      return NextResponse.json({ success: true, data: filtered });
+      return NextResponse.json({ success: true, data: mockStore.links });
     }
   } catch (error: any) {
     return NextResponse.json(
@@ -84,6 +78,20 @@ export async function POST(request: NextRequest) {
       };
 
       mockStore.links.unshift(newLink);
+
+      // Attach link to product object
+      const targetProd = mockStore.products.find((p) => p.id === productId);
+      if (targetProd) {
+        if (!targetProd.affiliateLinks) targetProd.affiliateLinks = [];
+        targetProd.affiliateLinks.unshift({
+          id: newLink.id,
+          shortCode: newLink.shortCode,
+          originalUrl: newLink.originalUrl,
+          platform: newLink.platform,
+        });
+      }
+
+      saveStoreToDisk();
       return NextResponse.json({ success: true, data: newLink });
     }
   } catch (error: any) {
@@ -111,7 +119,16 @@ export async function DELETE(request: NextRequest) {
     } catch {
       const index = mockStore.links.findIndex((l) => l.id === id);
       if (index !== -1) {
+        const deletedLink = mockStore.links[index];
         mockStore.links.splice(index, 1);
+
+        // Remove from product's affiliateLinks array too
+        const targetProd = mockStore.products.find((p) => p.id === deletedLink.productId);
+        if (targetProd && targetProd.affiliateLinks) {
+          targetProd.affiliateLinks = targetProd.affiliateLinks.filter((l) => l.id !== id);
+        }
+
+        saveStoreToDisk();
       }
       return NextResponse.json({ success: true });
     }

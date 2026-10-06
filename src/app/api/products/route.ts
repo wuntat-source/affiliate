@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { mockStore, MockProduct } from "@/lib/mock-store";
+import { mockStore, MockProduct, saveStoreToDisk } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
@@ -35,11 +35,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: products });
     } catch {
       let filtered = mockStore.products;
-      if (!userCtx.isAdmin) {
-        filtered = filtered.filter(
-          (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
-        );
-      }
 
       if (search) {
         filtered = filtered.filter(
@@ -104,6 +99,7 @@ export async function POST(request: NextRequest) {
       };
 
       mockStore.products.unshift(newMockProd);
+      saveStoreToDisk();
       return NextResponse.json({ success: true, data: newMockProd });
     }
   } catch (error: any) {
@@ -134,6 +130,7 @@ export async function DELETE(request: NextRequest) {
         mockStore.products.splice(index, 1);
         // Also remove associated links
         mockStore.links = mockStore.links.filter((l) => l.productId !== id);
+        saveStoreToDisk();
       }
       return NextResponse.json({ success: true });
     }
