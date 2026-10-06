@@ -57,8 +57,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     { id: "history", label: "History", icon: History },
     { id: "auto-poster", label: "Social Accounts", icon: Users },
     { id: "queue", label: "Queue", icon: CalendarClock },
-    { id: "settings", label: "Settings", icon: Settings },
+    { id: "settings", label: "Settings", icon: Settings, adminOnly: true },
   ];
+
+  const visibleNavItems = navItems.filter(
+    (item) => !item.adminOnly || currentUser?.role === "ADMIN"
+  );
 
   function handleRefresh() {
     setIsRefreshing(true);
@@ -104,7 +108,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
           {/* Nav List */}
           <nav className={`p-3 space-y-1 mt-1 ${mobileMenuOpen ? "block" : "hidden md:block"}`}>
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.id;
               return (

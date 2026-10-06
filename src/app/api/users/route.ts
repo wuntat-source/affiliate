@@ -18,10 +18,10 @@ const globalUsers = globalThis as unknown as {
 if (!globalUsers.__systemUsers || globalUsers.__systemUsers.length === 0) {
   globalUsers.__systemUsers = [
     {
-      id: "usr_admin_default",
-      username: "Beruangmadu",
-      password: "Beruang4321_",
-      name: "Beruang Madu",
+      id: "usr_admin_kenzie",
+      username: "kenzieganteng",
+      password: "AmeeraKenzie190613",
+      name: "Kenzie Ganteng",
       role: "ADMIN",
       createdAt: new Date().toISOString(),
     },

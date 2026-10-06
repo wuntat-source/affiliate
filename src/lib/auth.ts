@@ -1,6 +1,6 @@
 export const AUTH_CREDENTIALS = {
-  username: "Beruangmadu",
-  password: "Beruang4321_",
+  username: "kenzieganteng",
+  password: "AmeeraKenzie190613",
 };
 
 const AUTH_KEY = "affiliatepost_auth_session";
@@ -38,9 +38,9 @@ export function getCurrentUser(): LoggedInUser | null {
     }
   }
   return {
-    id: "usr_admin_default",
-    username: "Beruangmadu",
-    name: "Beruang Madu",
+    id: "usr_admin_kenzie",
+    username: "kenzieganteng",
+    name: "Kenzie Ganteng",
     role: "ADMIN",
   };
 }

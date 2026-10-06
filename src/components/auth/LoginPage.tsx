@@ -37,11 +37,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       }
     } catch (err: any) {
       // Fallback local check
-      if (username.trim() === "Beruangmadu" && password.trim() === "Beruang4321_") {
+      if (username.trim() === "kenzieganteng" && password.trim() === "AmeeraKenzie190613") {
         setAuthSession({
-          id: "usr_admin_default",
-          username: "Beruangmadu",
-          name: "Beruang Madu",
+          id: "usr_admin_kenzie",
+          username: "kenzieganteng",
+          name: "Kenzie Ganteng",
           role: "ADMIN",
         });
         onLoginSuccess();
@@ -54,8 +54,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   }
 
   function handleQuickFill() {
-    setUsername("Beruangmadu");
-    setPassword("Beruang4321_");
+    setUsername("kenzieganteng");
+    setPassword("AmeeraKenzie190613");
     setError(null);
   }
 

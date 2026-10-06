@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
 
     const users = globalUsers.__systemUsers || [
       {
-        id: "usr_admin_default",
-        username: "Beruangmadu",
-        password: "Beruang4321_",
-        name: "Beruang Madu",
+        id: "usr_admin_kenzie",
+        username: "kenzieganteng",
+        password: "AmeeraKenzie190613",
+        name: "Kenzie Ganteng",
         role: "ADMIN",
         createdAt: new Date().toISOString(),
       },
