@@ -16,7 +16,7 @@ import {
   AlertCircle,
   Layers,
 } from "lucide-react";
-import { clearAuthSession } from "@/lib/auth";
+import { clearAuthSession, getCurrentUser, LoggedInUser } from "@/lib/auth";
 
 export type NavTab =
   | "dashboard"
@@ -43,6 +43,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentUser, setCurrentUser] = useState<LoggedInUser | null>(null);
+
+  React.useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -151,16 +156,27 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           </div>
 
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-600 font-bold flex items-center justify-center text-xs border border-orange-200">
-                BM
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="w-7 h-7 rounded-full bg-orange-100 text-orange-600 font-bold flex items-center justify-center text-xs border border-orange-200 shrink-0">
+                {currentUser?.name
+                  ? currentUser.name.slice(0, 2).toUpperCase()
+                  : currentUser?.username
+                  ? currentUser.username.slice(0, 2).toUpperCase()
+                  : "BM"}
               </div>
-              <span className="text-xs font-bold text-slate-800">Beruangmadu</span>
+              <div className="truncate">
+                <p className="text-xs font-bold text-slate-800 truncate">
+                  {currentUser?.name || currentUser?.username || "Beruangmadu"}
+                </p>
+                <p className="text-[10px] text-slate-400 font-mono">
+                  {currentUser?.role === "ADMIN" ? "Admin" : "User"}
+                </p>
+              </div>
             </div>
 
             <button
               onClick={handleSignOut}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer shrink-0 ml-1"
               title="Logout"
             >
               <LogOut className="w-4 h-4" />

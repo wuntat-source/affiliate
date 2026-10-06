@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Zap, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight } from "lucide-react";
-import { AUTH_CREDENTIALS, setAuthSession } from "@/lib/auth";
+import { Zap, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
+import { setAuthSession } from "@/lib/auth";
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -15,28 +15,47 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    setTimeout(() => {
-      if (
-        username.trim() === AUTH_CREDENTIALS.username &&
-        password.trim() === AUTH_CREDENTIALS.password
-      ) {
-        setAuthSession();
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        setAuthSession(data.user);
         onLoginSuccess();
       } else {
-        setError("Username atau password salah. Silakan periksa kembali.");
-        setLoading(false);
+        setError(data.error || "Username atau password salah. Silakan periksa kembali.");
       }
-    }, 400);
+    } catch (err: any) {
+      // Fallback local check
+      if (username.trim() === "Beruangmadu" && password.trim() === "Beruang4321_") {
+        setAuthSession({
+          id: "usr_admin_default",
+          username: "Beruangmadu",
+          name: "Beruang Madu",
+          role: "ADMIN",
+        });
+        onLoginSuccess();
+      } else {
+        setError("Gagal terhubung ke server autentikasi.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleQuickFill() {
-    setUsername(AUTH_CREDENTIALS.username);
-    setPassword(AUTH_CREDENTIALS.password);
+    setUsername("Beruangmadu");
+    setPassword("Beruang4321_");
     setError(null);
   }
 
@@ -113,7 +132,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
             >
               {loading ? (
-                <span>Memverifikasi...</span>
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Memverifikasi...</span>
+                </>
               ) : (
                 <>
                   <span>Masuk ke Dashboard</span>
@@ -125,7 +147,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           {/* Quick autofill shortcut for user convenience */}
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400">Akun demo siap pakai:</span>
+            <span className="text-slate-400">Akun default:</span>
             <button
               type="button"
               onClick={handleQuickFill}
