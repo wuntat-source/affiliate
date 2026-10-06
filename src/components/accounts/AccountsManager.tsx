@@ -14,6 +14,7 @@ import {
   Globe,
   ExternalLink,
   Laptop,
+  CheckCircle,
 } from "lucide-react";
 import { getAuthHeaders } from "@/lib/auth";
 
@@ -55,6 +56,8 @@ export const AccountsManager: React.FC = () => {
   const [browserUsername, setBrowserUsername] = useState("");
   const [browserPlatform, setBrowserPlatform] = useState<"THREADS" | "TWITTER">("THREADS");
   const [browserLoading, setBrowserLoading] = useState(false);
+  const [browserWindowOpen, setBrowserWindowOpen] = useState(false);
+  const [verifyingSession, setVerifyingSession] = useState(false);
   const [browserFeedback, setBrowserFeedback] = useState<{ success: boolean; msg: string } | null>(null);
 
   useEffect(() => {
@@ -85,15 +88,15 @@ export const AccountsManager: React.FC = () => {
 
       const data = await res.json();
       if (data.success) {
+        setBrowserWindowOpen(true);
         setBrowserFeedback({
           success: true,
-          msg: data.message || "Sesi browser berhasil disimpan dan akun terhubung!",
+          msg: data.message || "Jendela Chromium terbuka. Silakan login ke Threads di jendela tersebut.",
         });
-        loadAccounts();
       } else {
         setBrowserFeedback({
           success: false,
-          msg: data.error || data.message || "Gagal membuka sesi browser.",
+          msg: data.error || data.message || "Gagal membuka jendela browser Chromium.",
         });
       }
     } catch (err: any) {
@@ -103,6 +106,44 @@ export const AccountsManager: React.FC = () => {
       });
     } finally {
       setBrowserLoading(false);
+    }
+  }
+
+  async function handleVerifySession() {
+    if (!browserUsername.trim()) return;
+
+    setVerifyingSession(true);
+    setBrowserFeedback(null);
+
+    try {
+      const res = await fetch(
+        `/api/browser-session/status?platform=${browserPlatform}&username=${encodeURIComponent(
+          browserUsername.trim()
+        )}`,
+        { headers: getAuthHeaders() }
+      );
+
+      const data = await res.json();
+      if (data.loggedIn) {
+        setBrowserWindowOpen(false);
+        setBrowserFeedback({
+          success: true,
+          msg: data.message || "Sesi login berhasil diverifikasi & akun siap digunakan!",
+        });
+        loadAccounts();
+      } else {
+        setBrowserFeedback({
+          success: false,
+          msg: data.message || "Belum terdeteksi login. Pastikan Anda sudah masuk ke beranda Threads di jendela Chromium.",
+        });
+      }
+    } catch (err: any) {
+      setBrowserFeedback({
+        success: false,
+        msg: err.message || "Gagal memverifikasi sesi login.",
+      });
+    } finally {
+      setVerifyingSession(false);
     }
   }
 
@@ -219,7 +260,7 @@ export const AccountsManager: React.FC = () => {
             Social Media Accounts (Threads, X / Twitter)
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Hubungkan akun Threads kamu langsung via Browser Automation (Playwright) atau gunakan Sandbox Mode tanpa memerlukan API Token yang rumit.
+            Hubungkan akun Threads kamu langsung via Browser Automation (Playwright) atau gunakan Sandbox Mode tanpa API Token.
           </p>
         </div>
 
@@ -242,14 +283,14 @@ export const AccountsManager: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold text-slate-900">
-                  Login Cepat Threads (Browser Automation Playwright)
+                  Login Threads via Browser Chromium
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                  Tanpa Token API
+                  Bypass Token API
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-0.5 max-w-xl">
-                Cukup ketik username Threads kamu, lalu klik tombol di bawah untuk membuka jendela Chromium. Login manual sekali dan sesi auto-posting tersimpan permanen di komputer ini.
+                Ketik username Threads Anda, klik tombol buka browser, lalu login di jendela Chromium yang muncul. Sesi tersimpan permanen di komputer ini untuk auto-posting.
               </p>
             </div>
           </div>
@@ -268,13 +309,18 @@ export const AccountsManager: React.FC = () => {
 
           <button
             onClick={handleLaunchBrowserLogin}
-            disabled={browserLoading}
+            disabled={browserLoading || browserWindowOpen}
             className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
           >
             {browserLoading ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                Membuka Chromium Browser...
+                Membuka Jendela Chromium...
+              </>
+            ) : browserWindowOpen ? (
+              <>
+                <Globe className="w-4 h-4 text-emerald-400" />
+                Jendela Browser Terbuka
               </>
             ) : (
               <>
@@ -284,7 +330,42 @@ export const AccountsManager: React.FC = () => {
               </>
             )}
           </button>
+
+          {browserWindowOpen && (
+            <button
+              onClick={handleVerifySession}
+              disabled={verifyingSession}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 animate-pulse"
+            >
+              {verifyingSession ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Memeriksa Sesi Login...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  Selesai Login & Simpan Sesi
+                </>
+              )}
+            </button>
+          )}
         </div>
+
+        {/* Step Guide if Browser is Open */}
+        {browserWindowOpen && (
+          <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 space-y-1">
+            <p className="font-semibold flex items-center gap-1.5 text-indigo-950">
+              <Laptop className="w-4 h-4 text-indigo-600" />
+              Jendela Chromium telah dibuka di layar Anda!
+            </p>
+            <p className="text-[11px] text-indigo-800">
+              1. Beralih ke jendela browser Chromium yang baru muncul (atau cek icon Chrome baru di taskbar Windows).<br />
+              2. Masukkan username & password akun Threads Anda.<br />
+              3. Setelah berhasil masuk ke beranda Threads, kembali ke sini dan klik tombol hijau <strong>&quot;Selesai Login &amp; Simpan Sesi&quot;</strong> di atas.
+            </p>
+          </div>
+        )}
 
         {browserFeedback && (
           <div

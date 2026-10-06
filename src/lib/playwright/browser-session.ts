@@ -10,6 +10,20 @@ if (!fs.existsSync(PROFILES_DIR)) {
 }
 
 /**
+ * In-memory map of currently open interactive login sessions
+ */
+const activeLoginSessions: Record<
+  string,
+  {
+    context: BrowserContext;
+    page: Page;
+    platform: "THREADS" | "TWITTER";
+    username: string;
+    startedAt: number;
+  }
+> = {};
+
+/**
  * Clean up Chromium Singleton locks and stale lockfiles that cause
  * "Opening in existing browser session" errors on Windows.
  */
@@ -74,22 +88,29 @@ const COMMON_CHROME_ARGS = [
 ];
 
 /**
- * Launch an interactive visible Chromium browser window so the user can login manually.
+ * Open interactive browser window non-blockingly so the UI responds immediately.
  */
-export async function launchInteractiveLogin(
+export async function openInteractiveBrowser(
   platform: "THREADS" | "TWITTER",
   username: string
 ): Promise<{ success: boolean; message: string }> {
   const profilePath = getProfilePath(platform, username);
-  const statePath = getStateJsonPath(platform, username);
+  const sessionKey = `${platform}_${username}`;
 
-  // Clean stale lock files
+  // If already open, close old one first
+  if (activeLoginSessions[sessionKey]) {
+    try {
+      await activeLoginSessions[sessionKey].context.close();
+    } catch {}
+    delete activeLoginSessions[sessionKey];
+  }
+
   cleanProfileLocks(profilePath);
 
   try {
     const context = await chromium.launchPersistentContext(profilePath, {
       headless: false,
-      viewport: null, // Let window use full maximized screen
+      viewport: null, // Full maximized screen
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       args: COMMON_CHROME_ARGS,
@@ -103,64 +124,84 @@ export async function launchInteractiveLogin(
       await page.goto("https://x.com/i/flow/login", { waitUntil: "domcontentloaded" });
     }
 
-    // Keep context open for user to complete login in the opened browser window
-    // We poll in background for login completion up to 3 minutes (180 seconds)
-    let loggedIn = false;
-    const startTime = Date.now();
+    activeLoginSessions[sessionKey] = {
+      context,
+      page,
+      platform,
+      username,
+      startedAt: Date.now(),
+    };
 
-    while (Date.now() - startTime < 180000) {
-      if (context.pages().length === 0) {
-        break; // Browser window was closed by user
-      }
-
-      try {
-        const currentUrl = page.url();
-        if (platform === "THREADS") {
-          // If redirected away from login and on threads.net main feed
-          if (
-            !currentUrl.includes("/login") &&
-            (currentUrl.includes("threads.net") || currentUrl.includes("/@"))
-          ) {
-            loggedIn = true;
-            break;
-          }
-        } else {
-          if (!currentUrl.includes("/login") && (currentUrl.includes("x.com/home") || currentUrl.includes("twitter.com/home"))) {
-            loggedIn = true;
-            break;
-          }
-        }
-      } catch {
-        // Page might be navigating
-      }
-
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-
-    if (loggedIn) {
-      try {
-        // Save backup storage state
-        await context.storageState({ path: statePath });
-      } catch {}
-    }
-
-    await context.close();
-    cleanProfileLocks(profilePath);
+    // Listen for close
+    context.on("close", () => {
+      delete activeLoginSessions[sessionKey];
+      cleanProfileLocks(profilePath);
+    });
 
     return {
-      success: loggedIn,
-      message: loggedIn
-        ? `Sesi login ${platform} untuk @${username} berhasil disimpan dan siap auto-post!`
-        : `Jendela browser ditutup atau waktu tunggu login (3 menit) selesai. Silakan ulangi jika belum selesai login.`,
+      success: true,
+      message: "Jendela browser Chromium telah terbuka di layar Anda. Silakan login ke akun Threads Anda pada jendela yang muncul.",
     };
   } catch (error: any) {
-    console.error("[Playwright Login Error]:", error);
+    console.error("[Playwright Launch Error]:", error);
     cleanProfileLocks(profilePath);
     return {
       success: false,
-      message: error.message || "Gagal membuka browser Chromium.",
+      message: error.message || "Gagal meluncurkan browser Chromium.",
     };
   }
+}
+
+/**
+ * Check if the user is currently logged in (either in active open window or stored profile)
+ */
+export async function verifyAndSaveSession(
+  platform: "THREADS" | "TWITTER",
+  username: string
+): Promise<{ loggedIn: boolean; message: string }> {
+  const sessionKey = `${platform}_${username}`;
+  const profilePath = getProfilePath(platform, username);
+  const statePath = getStateJsonPath(platform, username);
+
+  // 1. Check if an active interactive window is open
+  const active = activeLoginSessions[sessionKey];
+  if (active) {
+    try {
+      const currentUrl = active.page.url();
+      let isAuthed = false;
+
+      if (platform === "THREADS") {
+        isAuthed =
+          !currentUrl.includes("/login") &&
+          (currentUrl.includes("threads.net") || currentUrl.includes("/@"));
+      } else {
+        isAuthed = !currentUrl.includes("/login") && (currentUrl.includes("x.com/home") || currentUrl.includes("twitter.com/home"));
+      }
+
+      if (isAuthed) {
+        // Save storage state snapshot
+        await active.context.storageState({ path: statePath });
+        await active.context.close();
+        delete activeLoginSessions[sessionKey];
+        cleanProfileLocks(profilePath);
+
+        return {
+          loggedIn: true,
+          message: `✅ Sesi login @${username} berhasil disimpan dan akun terhubung aktif!`,
+        };
+      } else {
+        return {
+          loggedIn: false,
+          message: `Browser masih berada di halaman login (${currentUrl}). Selesaikan login di jendela browser Chromium, lalu klik 'Cek Status Login'.`,
+        };
+      }
+    } catch (err: any) {
+      delete activeLoginSessions[sessionKey];
+    }
+  }
+
+  // 2. Check stored profile offline via headless
+  return checkLoginStatus(platform, username);
 }
 
 /**
@@ -169,7 +210,7 @@ export async function launchInteractiveLogin(
 export async function checkLoginStatus(
   platform: "THREADS" | "TWITTER",
   username: string
-): Promise<{ loggedIn: boolean; details?: string }> {
+): Promise<{ loggedIn: boolean; message: string }> {
   const profilePath = getProfilePath(platform, username);
   const statePath = getStateJsonPath(platform, username);
   cleanProfileLocks(profilePath);
@@ -206,13 +247,15 @@ export async function checkLoginStatus(
 
     return {
       loggedIn: isAuthed,
-      details: isAuthed ? "Sesi browser aktif dan siap posting" : "Belum login atau sesi telah berakhir",
+      message: isAuthed
+        ? `✅ Sesi browser untuk @${username} AKTIF & Siap Auto-Post!`
+        : `⚠️ Akun @${username} belum login. Klik 'Buka Browser Login Threads' untuk login.`,
     };
   } catch (err: any) {
     cleanProfileLocks(profilePath);
     return {
       loggedIn: false,
-      details: err.message || "Gagal memverifikasi sesi browser",
+      message: err.message || "Gagal memverifikasi sesi browser",
     };
   }
 }
