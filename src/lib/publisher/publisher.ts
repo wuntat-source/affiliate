@@ -1,7 +1,10 @@
+import { postThreadViaPlaywright } from "@/lib/playwright/browser-session";
+
 export interface PublishPayload {
   accountId: string;
-  platform: "THREADS" | "TWITTER" | "INSTAGRAM" | "TIKTOK";
+  platform: "THREADS" | "TWITTER" | "INSTAGRAM" | "TIKTOK" | "THREADS_BROWSER" | "TWITTER_BROWSER";
   accessToken: string;
+  username?: string;
   platformUserId?: string;
   mainContent: string;
   replyContent?: string;
@@ -18,10 +21,40 @@ export interface PublishResult {
 }
 
 export async function publishPostToPlatform(payload: PublishPayload): Promise<PublishResult> {
-  const { platform, accessToken, mainContent, replyContent, isSandbox } = payload;
+  const { platform, accessToken, username, mainContent, replyContent, isSandbox } = payload;
 
-  // Sandbox Mode Simulation
-  if (isSandbox || process.env.NODE_ENV === "development" && !accessToken) {
+  // 1. Check if this is a Playwright Browser Automation account
+  if (platform === "THREADS_BROWSER" || accessToken === "playwright_browser_session") {
+    const replyParts = replyContent
+      ? replyContent
+          .split(/\n\s*---\s*\n/)
+          .map((p) => p.trim())
+          .filter(Boolean)
+      : [];
+
+    const browserRes = await postThreadViaPlaywright({
+      username: username || "my_threads_account",
+      mainText: mainContent,
+      replyParts,
+      headless: true,
+    });
+
+    if (browserRes.success) {
+      return {
+        success: true,
+        externalMainId: `pw_threads_${Date.now()}`,
+        details: { mode: "playwright_browser", message: browserRes.message },
+      };
+    } else {
+      return {
+        success: false,
+        error: browserRes.error || "Gagal memposting via Playwright Browser.",
+      };
+    }
+  }
+
+  // 2. Sandbox Mode Simulation
+  if (isSandbox || (process.env.NODE_ENV === "development" && !accessToken)) {
     console.log(`[Publisher Sandbox] Simulating post to ${platform}:`, {
       main: mainContent.slice(0, 60) + "...",
       reply: replyContent ? replyContent.slice(0, 60) + "..." : null,

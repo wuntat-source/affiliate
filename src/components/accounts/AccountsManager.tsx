@@ -11,6 +11,9 @@ import {
   Zap,
   AlertCircle,
   Check,
+  Globe,
+  ExternalLink,
+  Laptop,
 } from "lucide-react";
 import { getAuthHeaders } from "@/lib/auth";
 
@@ -52,9 +55,60 @@ export const AccountsManager: React.FC = () => {
   const [isSandbox, setIsSandbox] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Playwright Browser Login states
+  const [browserUsername, setBrowserUsername] = useState("");
+  const [browserPlatform, setBrowserPlatform] = useState<"THREADS" | "TWITTER">("THREADS");
+  const [browserLoading, setBrowserLoading] = useState(false);
+  const [browserFeedback, setBrowserFeedback] = useState<{ success: boolean; msg: string } | null>(null);
+
   useEffect(() => {
     loadAccounts();
   }, []);
+
+  async function handleLaunchBrowserLogin() {
+    if (!browserUsername.trim()) {
+      setBrowserFeedback({
+        success: false,
+        msg: "Harap masukkan username Threads terlebih dahulu!",
+      });
+      return;
+    }
+
+    setBrowserLoading(true);
+    setBrowserFeedback(null);
+
+    try {
+      const res = await fetch("/api/browser-session/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({
+          platform: browserPlatform,
+          username: browserUsername.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setBrowserFeedback({
+          success: true,
+          msg: data.message || "Sesi browser berhasil disimpan!",
+        });
+        loadAccounts();
+      } else {
+        setBrowserFeedback({
+          success: false,
+          msg: data.error || data.message || "Gagal membuka sesi browser.",
+        });
+      }
+    } catch (err: any) {
+      setBrowserFeedback({
+        success: false,
+        msg: err.message || "Terjadi kesalahan saat membuka browser Chromium.",
+      });
+    } finally {
+      setBrowserLoading(false);
+    }
+  }
 
   async function loadAccounts() {
     try {
@@ -215,8 +269,80 @@ export const AccountsManager: React.FC = () => {
           className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          + Connect Social Account
+          + Connect Social Account (Token / Sandbox)
         </button>
+      </div>
+
+      {/* Playwright Chromium Browser Login Card */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-900/5 via-violet-900/5 to-purple-900/5 border border-indigo-200/60 shadow-xs space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Laptop className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Browser Automation Mode (Playwright Chromium)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                  Bypass Token API
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5 max-w-xl">
+                Login akun Threads kamu sekali via jendela browser Chromium Playwright di komputer ini. Sesi login (cookies & localStorage) akan tersimpan permanen di folder profil untuk auto-posting otomatis tanpa perlu Meta Developer App Token.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <div className="flex-1 min-w-[200px] max-w-xs">
+            <input
+              type="text"
+              value={browserUsername}
+              onChange={(e) => setBrowserUsername(e.target.value)}
+              placeholder="Masukkan username Threads (e.g. kenzie_threads)"
+              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono shadow-2xs"
+            />
+          </div>
+
+          <button
+            onClick={handleLaunchBrowserLogin}
+            disabled={browserLoading}
+            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+          >
+            {browserLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Membuka Chromium Browser...
+              </>
+            ) : (
+              <>
+                <Globe className="w-4 h-4 text-indigo-400" />
+                Buka Browser Login Threads
+                <ExternalLink className="w-3 h-3 text-slate-400" />
+              </>
+            )}
+          </button>
+        </div>
+
+        {browserFeedback && (
+          <div
+            className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+              browserFeedback.success
+                ? "bg-emerald-50 text-emerald-850 border border-emerald-200"
+                : "bg-rose-50 text-rose-850 border border-rose-200"
+            }`}
+          >
+            {browserFeedback.success ? (
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{browserFeedback.msg}</span>
+          </div>
+        )}
       </div>
 
       {/* Accounts Grid */}
