@@ -195,6 +195,26 @@ export async function checkLoginStatus(
     };
   }
 
+  // 1. Instant check from saved session state cookies
+  try {
+    const raw = JSON.parse(fs.readFileSync(statePath, "utf-8"));
+    const hasAuthCookie = (raw.cookies || []).some(
+      (c: any) =>
+        c.name === "sessionid" ||
+        c.name === "ds_user_id" ||
+        c.name === "auth_token" ||
+        c.name === "twid"
+    );
+
+    if (hasAuthCookie) {
+      return {
+        loggedIn: true,
+        message: `✅ Sesi browser untuk @${username} AKTIF & Siap Auto-Post!`,
+      };
+    }
+  } catch {}
+
+  // 2. Fallback live verification with headless browser
   try {
     const browser = await chromium.launch({
       headless: true,
@@ -208,8 +228,8 @@ export async function checkLoginStatus(
     const page = await context.newPage();
     const targetUrl = platform === "THREADS" ? "https://www.threads.net/" : "https://x.com/home";
 
-    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await page.waitForTimeout(2500);
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
+    await page.waitForTimeout(2000);
 
     const currentUrl = page.url();
     let isAuthed = false;
@@ -230,7 +250,7 @@ export async function checkLoginStatus(
       loggedIn: isAuthed,
       message: isAuthed
         ? `✅ Sesi browser untuk @${username} AKTIF & Siap Auto-Post!`
-        : `⚠️ Akun @${username} belum login. Klik 'Buka Browser Login Threads' untuk login.`,
+        : `⚠️ Akun @${username} belum login atau sesi telah berakhir. Klik 'Buka Browser Login Threads' untuk login kembali.`,
     };
   } catch (err: any) {
     return {
