@@ -116,6 +116,7 @@ export const AccountsManager: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         setBrowserWindowOpen(true);
+        loadAccounts();
         setBrowserFeedback({
           success: true,
           msg: data.message || "Jendela Chromium terbuka. Silakan login ke Threads di jendela tersebut.",

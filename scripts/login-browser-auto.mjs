@@ -1,7 +1,6 @@
 import { chromium } from "playwright";
 import path from "path";
 import fs from "fs";
-import readline from "readline";
 
 const SESSIONS_DIR = path.resolve(process.cwd(), ".sessions");
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
@@ -65,84 +64,89 @@ async function run() {
 
   console.log("\n------------------------------------------------------------------");
   console.log(" 👉 SILAKAN LOGIN KE AKUN THREADS ANDA DI JENDELA BROWSER.");
-  console.log(" 👉 Masukkan Username/Email & Password Threads Anda.");
-  console.log(" 👉 Setelah berhasil login dan berada di Beranda Threads,");
-  console.log("    KEMBALI KE SINI LALU TEKAN TOMBOL [ENTER] UNTUK MENYIMPAN.");
+  console.log(" 👉 Masukkan Username / Email & Password akun Threads Anda.");
+  console.log(" 👉 Setelah Anda berhasil login dan masuk ke Beranda Threads,");
+  console.log("    sistem akan OTOMATIS mendeteksi login & menyimpan sesi Anda!");
   console.log("------------------------------------------------------------------\n");
-  console.log(" Menunggu Anda selesai login... (Tekan [ENTER] setelah login berhasil)");
+  console.log(" Sedang memantau status login di browser...");
 
   writeStatus({
     state: "waiting_login",
-    message: `Browser terbuka. Silakan login ke akun @${username} di jendela browser, lalu tekan ENTER di terminal.`,
+    message: `Browser terbuka. Silakan login ke akun @${username} di jendela browser.`,
   });
 
-  let loggedIn = false;
+  let isAuthed = false;
   const startTime = Date.now();
-  const TIMEOUT = 15 * 60 * 1000; // 15 minutes
-
-  // Enter listener
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  rl.on("line", () => {
-    console.log("\n⚡ Tombol ENTER ditekan. Memeriksa & menyimpan sesi login...");
-    loggedIn = true;
-  });
+  const TIMEOUT = 20 * 60 * 1000; // 20 minutes
 
   while (Date.now() - startTime < TIMEOUT) {
-    if (loggedIn) break;
-
     try {
       if (browser.contexts().length === 0 || context.pages().length === 0) {
-        console.log("\n⚠️ Jendela browser ditutup.");
+        console.log("\n⚠️ Jendela browser telah ditutup oleh pengguna.");
         break;
       }
 
-      // Check Cookies across Meta domains for actual authentication
+      // 1. Check cookies across all meta domains
       const cookies = await context.cookies([
         "https://www.threads.net",
         "https://threads.net",
         "https://www.threads.com",
         "https://threads.com",
         "https://www.instagram.com",
+        "https://instagram.com",
       ]);
 
-      const hasAuthCookie = cookies.some(
-        (c) =>
-          c.name === "sessionid" ||
-          c.name === "ds_user_id" ||
-          c.name === "auth_token" ||
-          c.name === "twid"
+      const hasSessionId = cookies.some(
+        (c) => c.name === "sessionid" || c.name === "ds_user_id"
       );
 
-      if (hasAuthCookie) {
-        console.log("\n✅ Cookie login Threads/Instagram terdeteksi!");
-        loggedIn = true;
+      if (hasSessionId) {
+        console.log("\n🎉 COOKIE LOGIN BERHASIL TERDETEKSI!");
+        isAuthed = true;
         break;
       }
+
+      // 2. Also check if page is on feed/profile and not login
+      for (const p of context.pages()) {
+        const url = p.url();
+        const hasProfileOrFeed =
+          url.includes("/@") ||
+          url.includes("/feed") ||
+          (url.includes("threads.net") && !url.includes("login") && !url.includes("accounts.google.com"));
+
+        if (hasProfileOrFeed) {
+          // Double check if sessionid arrived
+          const currentCookies = await context.cookies();
+          if (currentCookies.some((c) => c.name === "sessionid" || c.name === "ds_user_id")) {
+            isAuthed = true;
+            break;
+          }
+        }
+      }
+
+      if (isAuthed) break;
     } catch {
-      // transient navigation
+      // transient page navigation
     }
 
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 1200));
   }
 
-  try {
-    rl.close();
-  } catch {}
-
-  // Save session state
+  // Save session state to disk
   console.log("\n==================================================================");
   console.log(" Menyimpan cookies & sesi browser...");
   await context.storageState({ path: statePath });
 
-  const savedCookies = await context.cookies();
-  const isActuallyAuthed = savedCookies.some(
-    (c) => c.name === "sessionid" || c.name === "ds_user_id" || c.name === "auth_token"
+  // Verify what was saved
+  const finalCookies = await context.cookies();
+  const verified = finalCookies.some(
+    (c) => c.name === "sessionid" || c.name === "ds_user_id"
   );
 
-  if (isActuallyAuthed) {
-    console.log(` ✅ SESI LOGIN @${username} BERHASIL TERSIMPAN!`);
+  if (verified || isAuthed) {
+    console.log(` ✅ SESI LOGIN @${username} BERHASIL DISIMPAN & AKTIF!`);
     console.log(` Lokasi file: ${statePath}`);
-    console.log(" Akun Anda sudah AKTIF dan 100% siap Auto-Posting!");
+    console.log(" Akun Anda siap digunakan untuk auto-posting di AI Studio.");
     console.log("==================================================================\n");
 
     writeStatus({
@@ -150,17 +154,16 @@ async function run() {
       message: `Login @${username} berhasil! Sesi tersimpan dan akun siap digunakan.`,
     });
   } else {
-    console.log(`\n⚠️ Sesi disimpan tetapi cookie login belum terdeteksi.`);
-    console.log(` Pastikan Anda sudah login sampai melihat beranda Threads.`);
+    console.log(`\n⚠️ Sesi disimpan. Jika belum login, silakan ulangi dari dashboard.`);
     console.log("==================================================================\n");
 
     writeStatus({
       state: "warning",
-      message: `Sesi tersimpan. Pastikan Anda sudah login sebelum memposting.`,
+      message: `Sesi disimpan. Silakan klik Tes Sesi Browser untuk verifikasi.`,
     });
   }
 
-  await new Promise((r) => setTimeout(r, 2000));
+  await new Promise((r) => setTimeout(r, 3000));
   try {
     await browser.close();
   } catch {}
