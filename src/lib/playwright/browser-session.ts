@@ -10,7 +10,8 @@ if (!fs.existsSync(SESSIONS_DIR)) {
 }
 
 export function getStateJsonPath(platform: string, username: string): string {
-  const safeName = `${platform.toLowerCase()}_${username.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  const cleanUsername = username.trim().replace(/^@+/, "");
+  const safeName = `${platform.toLowerCase()}_${cleanUsername.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
   const userDir = path.join(SESSIONS_DIR, safeName);
   if (!fs.existsSync(userDir)) {
     try {

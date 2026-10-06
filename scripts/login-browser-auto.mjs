@@ -133,18 +133,16 @@ async function run() {
     await new Promise((r) => setTimeout(r, 1200));
   }
 
-  // Save session state to disk
-  console.log("\n==================================================================");
-  console.log(" Menyimpan cookies & sesi browser...");
-  await context.storageState({ path: statePath });
-
-  // Verify what was saved
+  // Save session state to disk only if authenticated
   const finalCookies = await context.cookies();
   const verified = finalCookies.some(
     (c) => c.name === "sessionid" || c.name === "ds_user_id"
   );
 
   if (verified || isAuthed) {
+    console.log("\n==================================================================");
+    console.log(" Menyimpan cookies & sesi browser...");
+    await context.storageState({ path: statePath });
     console.log(` ✅ SESI LOGIN @${username} BERHASIL DISIMPAN & AKTIF!`);
     console.log(` Lokasi file: ${statePath}`);
     console.log(" Akun Anda siap digunakan untuk auto-posting di AI Studio.");
