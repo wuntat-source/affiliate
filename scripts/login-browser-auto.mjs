@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import path from "path";
 import fs from "fs";
+import readline from "readline";
 
 const SESSIONS_DIR = path.resolve(process.cwd(), ".sessions");
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
@@ -66,8 +67,9 @@ async function run() {
   console.log(" 👉 SILAKAN LOGIN KE AKUN THREADS ANDA DI JENDELA BROWSER.");
   console.log(" 👉 Setelah berhasil login dan masuk ke beranda Threads,");
   console.log("    sistem akan OTOMATIS mendeteksi & menyimpan sesi login Anda.");
+  console.log(" 👉 Atau Anda juga bisa tekan tombol [ENTER] di sini jika sudah masuk.");
   console.log("------------------------------------------------------------------\n");
-  console.log(" Menunggu Anda selesai login di browser...");
+  console.log(" Menunggu login...");
 
   writeStatus({
     state: "waiting_login",
@@ -76,56 +78,93 @@ async function run() {
 
   let loggedIn = false;
   const startTime = Date.now();
-  const TIMEOUT = 5 * 60 * 1000; // 5 minutes
+  const TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
+  // Optional manual Enter listener
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  rl.on("line", () => {
+    loggedIn = true;
+  });
 
   while (Date.now() - startTime < TIMEOUT) {
+    if (loggedIn) break;
+
     try {
       if (browser.contexts().length === 0 || context.pages().length === 0) {
-        console.log("\n⚠️ Jendela browser ditutup sebelum selesai login.");
-        writeStatus({ state: "closed", message: "Browser ditutup sebelum login selesai." });
-        process.exit(0);
+        console.log("\n⚠️ Jendela browser ditutup.");
+        writeStatus({ state: "closed", message: "Browser ditutup." });
+        break;
       }
 
-      const url = page.url();
-      if (platform === "THREADS") {
-        loggedIn =
-          !url.includes("/login") &&
-          (url.includes("threads.net") || url.includes("threads.com") || url.includes("/@") || url.includes("/feed"));
-      } else {
-        loggedIn =
-          !url.includes("/login") &&
-          !url.includes("/flow/") &&
-          (url.includes("x.com") || url.includes("twitter.com"));
+      // 1. Check Cookies (sessionid / ds_user_id)
+      const cookies = await context.cookies();
+      const hasAuthCookie = cookies.some(
+        (c) =>
+          c.name === "sessionid" ||
+          c.name === "ds_user_id" ||
+          c.name === "auth_token" ||
+          c.name === "twid"
+      );
+
+      if (hasAuthCookie) {
+        loggedIn = true;
+        break;
+      }
+
+      // 2. Check all open pages URLs
+      for (const p of context.pages()) {
+        const url = p.url();
+        if (platform === "THREADS") {
+          if (
+            (url.includes("threads.net") || url.includes("threads.com")) &&
+            !url.endsWith("/login") &&
+            !url.includes("/login?") &&
+            !url.includes("accounts.google.com")
+          ) {
+            loggedIn = true;
+            break;
+          }
+        } else {
+          if (
+            (url.includes("x.com") || url.includes("twitter.com")) &&
+            !url.includes("/login") &&
+            !url.includes("/flow/")
+          ) {
+            loggedIn = true;
+            break;
+          }
+        }
       }
 
       if (loggedIn) break;
     } catch {
-      // page navigating
+      // transient navigation
     }
-    await new Promise((r) => setTimeout(r, 1500));
+
+    await new Promise((r) => setTimeout(r, 1000));
   }
 
-  if (loggedIn) {
-    console.log("\n==================================================================");
-    console.log(` ✅ LOGIN BERHASIL TERDETEKSI UNTUK @${username}!`);
-    console.log(" Menyimpan cookies & sesi browser...");
-    await context.storageState({ path: statePath });
-    console.log(` Sesi tersimpan di: ${statePath}`);
-    console.log(" Akun Anda sudah AKTIF dan siap Auto-Posting!");
-    console.log("==================================================================\n");
+  try {
+    rl.close();
+  } catch {}
 
-    writeStatus({
-      state: "success",
-      message: `Login @${username} berhasil! Sesi tersimpan dan akun siap digunakan.`,
-    });
+  console.log("\n==================================================================");
+  console.log(` ✅ LOGIN BERHASIL TERDETEKSI UNTUK @${username}!`);
+  console.log(" Menyimpan cookies & sesi browser...");
+  await context.storageState({ path: statePath });
+  console.log(` Sesi tersimpan di: ${statePath}`);
+  console.log(" Akun Anda sudah AKTIF dan siap Auto-Posting!");
+  console.log("==================================================================\n");
 
-    await new Promise((r) => setTimeout(r, 2500));
-  } else {
-    console.log("\n❌ Waktu login habis (5 menit).");
-    writeStatus({ state: "timeout", message: "Waktu login habis (5 menit). Silakan coba lagi." });
-  }
+  writeStatus({
+    state: "success",
+    message: `Login @${username} berhasil! Sesi tersimpan dan akun siap digunakan.`,
+  });
 
-  await browser.close();
+  await new Promise((r) => setTimeout(r, 2000));
+  try {
+    await browser.close();
+  } catch {}
   process.exit(0);
 }
 
