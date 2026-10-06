@@ -18,6 +18,9 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  Users,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { getAuthHeaders } from "@/lib/auth";
 
@@ -34,12 +37,14 @@ interface Account {
   id: string;
   platform: string;
   username: string;
+  accountName?: string;
 }
 
 export const AIStudio: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
   // Input states - Reset to clean initial values
   const [rawDescription, setRawDescription] = useState("");
@@ -120,11 +125,25 @@ export const AIStudio: React.FC = () => {
       if (data.success && data.data) {
         setAccounts(data.data);
         if (data.data.length > 0) {
-          setSelectedAccountId(data.data[0].id);
+          setSelectedAccountIds([data.data[0].id]);
         }
       }
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  function toggleAccount(id: string) {
+    setSelectedAccountIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function toggleAllAccounts() {
+    if (selectedAccountIds.length === accounts.length) {
+      setSelectedAccountIds([]);
+    } else {
+      setSelectedAccountIds(accounts.map((a) => a.id));
     }
   }
 
@@ -159,6 +178,7 @@ export const AIStudio: React.FC = () => {
     }
 
     setLoading(true);
+
     try {
       const res = await fetch("/api/ai/generate", {
         method: "POST",
@@ -206,45 +226,67 @@ export const AIStudio: React.FC = () => {
       return;
     }
 
-    const activeAccId = selectedAccountId || accounts[0]?.id;
-    if (!activeAccId) {
+    if (accounts.length === 0) {
       setValidationError("Belum ada Akun Sosial yang terhubung! Silakan tambahkan akun Threads Anda di menu 'Social Accounts' terlebih dahulu.");
       return;
     }
 
+    const targetIds = selectedAccountIds.length > 0 ? selectedAccountIds : [accounts[0].id];
+
     setQueueLoading(true);
 
-    try {
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({
-          accountId: activeAccId,
-          productId: selectedProductId || undefined,
-          mainContent: effectiveMain,
-          replyContent: effectiveReply,
-          scheduledAt: immediate ? undefined : scheduleTime || undefined,
-        }),
-      });
+    let successCount = 0;
+    const errors: string[] = [];
 
-      const data = await res.json();
-      if (data.success) {
-        if (immediate) {
-          const pubRes = await fetch(`/api/posts/${data.data.id}/publish`, {
-            method: "POST",
-            headers: getAuthHeaders(),
-          });
-          const pubData = await pubRes.json();
-          if (pubData.success) {
-            setQueueSuccessMsg("✅ Postingan dan seluruh balasan berantai berhasil dipublikasikan ke Threads!");
+    try {
+      for (let i = 0; i < targetIds.length; i++) {
+        const accId = targetIds[i];
+        const targetAcc = accounts.find((a) => a.id === accId);
+        const accLabel = targetAcc ? `@${targetAcc.username}` : `Akun #${i + 1}`;
+
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+          body: JSON.stringify({
+            accountId: accId,
+            productId: selectedProductId || undefined,
+            mainContent: effectiveMain,
+            replyContent: effectiveReply,
+            scheduledAt: immediate ? undefined : scheduleTime || undefined,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          if (immediate) {
+            const pubRes = await fetch(`/api/posts/${data.data.id}/publish`, {
+              method: "POST",
+              headers: getAuthHeaders(),
+            });
+            const pubData = await pubRes.json();
+            if (pubData.success) {
+              successCount++;
+            } else {
+              errors.push(`${accLabel}: ${pubData.error || "Gagal posting"}`);
+            }
           } else {
-            setValidationError(pubData.error || "Gagal mempublikasikan postingan ke Threads. Pastikan sesi browser Threads aktif.");
+            successCount++;
           }
         } else {
-          setQueueSuccessMsg("✅ Postingan & utas cerita berhasil dimasukkan ke jadwal antrean (Queue)!");
+          errors.push(`${accLabel}: ${data.error || "Gagal simpan"}`);
         }
-      } else {
-        setValidationError(data.error || "Gagal memproses postingan.");
+      }
+
+      if (successCount > 0) {
+        if (immediate) {
+          setQueueSuccessMsg(`✅ Berhasil mempublikasikan postingan dan balasan ke ${successCount} akun Threads!`);
+        } else {
+          setQueueSuccessMsg(`✅ Berhasil menjadwalkan postingan ke ${successCount} akun target antrean!`);
+        }
+      }
+
+      if (errors.length > 0) {
+        setValidationError(`⚠️ Beberapa akun mengalami kendala: ${errors.join(", ")}`);
       }
     } catch (e: any) {
       console.error("Queue post error:", e);
@@ -718,28 +760,72 @@ export const AIStudio: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Target Account</label>
-                  <select
-                    value={selectedAccountId}
-                    onChange={(e) => setSelectedAccountId(e.target.value)}
-                    className="w-full bg-slate-50 text-slate-800 text-xs px-3 py-2 rounded-xl border border-slate-200 outline-none"
-                  >
-                    {accounts.length === 0 ? (
-                      <option value="">Threads Creator (Sandbox Active)</option>
-                    ) : (
-                      accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.platform} (@{acc.username})
-                        </option>
-                      ))
-                    )}
-                  </select>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-indigo-600" />
+                    Target Akun ({selectedAccountIds.length} dari {accounts.length} Dipilih)
+                  </label>
+                  {accounts.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={toggleAllAccounts}
+                      className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      {selectedAccountIds.length === accounts.length ? (
+                        <>
+                          <CheckSquare className="w-3 h-3" /> Batalkan Semua
+                        </>
+                      ) : (
+                        <>
+                          <Square className="w-3 h-3" /> Pilih Semua Akun ({accounts.length})
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
 
+                {accounts.length === 0 ? (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+                    <span>Threads Creator (Sandbox Mode)</span>
+                    <span className="text-[10px] font-mono text-amber-600 font-bold">SANDBOX</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {accounts.map((acc) => {
+                      const isSelected = selectedAccountIds.includes(acc.id);
+                      return (
+                        <button
+                          key={acc.id}
+                          type="button"
+                          onClick={() => toggleAccount(acc.id)}
+                          className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-indigo-50/90 border-indigo-300 text-indigo-950 shadow-2xs"
+                              : "bg-slate-50 border-slate-200/80 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <div
+                              className={`w-4 h-4 rounded flex items-center justify-center text-white text-[10px] shrink-0 ${
+                                isSelected ? "bg-indigo-600" : "border border-slate-300 bg-white"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3 h-3" />}
+                            </div>
+                            <div className="truncate">
+                              <p className="text-xs font-bold leading-tight truncate">@{acc.username}</p>
+                              <p className="text-[10px] text-slate-500 font-mono">{acc.platform}</p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Schedule For</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Schedule For (Opsional Jadwal)</label>
                   <input
                     type="datetime-local"
                     value={scheduleTime}
@@ -765,7 +851,7 @@ export const AIStudio: React.FC = () => {
                   className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-200 transition-all cursor-pointer disabled:opacity-50"
                 >
                   <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-                  Add to Post Queue
+                  Add to Post Queue {selectedAccountIds.length > 1 && `(${selectedAccountIds.length} Akun)`}
                 </button>
                 <button
                   type="button"
@@ -776,12 +862,12 @@ export const AIStudio: React.FC = () => {
                   {queueLoading ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Publishing...
+                      Publishing ke {selectedAccountIds.length} Akun...
                     </>
                   ) : (
                     <>
                       <Send className="w-3.5 h-3.5" />
-                      Publish Now
+                      Publish Now {selectedAccountIds.length > 1 && `(${selectedAccountIds.length} Akun)`}
                     </>
                   )}
                 </button>
