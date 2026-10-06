@@ -57,14 +57,36 @@ export async function openInteractiveBrowser(
   }
 
   try {
-    const browser = await chromium.launch({
-      headless: false,
-      args: [
-        "--new-window",
-        "--disable-blink-features=AutomationControlled",
-        "--start-maximized",
-      ],
-    });
+    let browser: Browser;
+    const launchArgs = [
+      "--new-window",
+      "--disable-blink-features=AutomationControlled",
+      "--start-maximized",
+    ];
+
+    try {
+      // 1. Try system Google Chrome (Guaranteed visible top window on Windows desktop)
+      browser = await chromium.launch({
+        channel: "chrome",
+        headless: false,
+        args: launchArgs,
+      });
+    } catch {
+      try {
+        // 2. Try Microsoft Edge
+        browser = await chromium.launch({
+          channel: "msedge",
+          headless: false,
+          args: launchArgs,
+        });
+      } catch {
+        // 3. Fallback to bundled Chromium
+        browser = await chromium.launch({
+          headless: false,
+          args: launchArgs,
+        });
+      }
+    }
 
     const context = await browser.newContext({
       viewport: null,

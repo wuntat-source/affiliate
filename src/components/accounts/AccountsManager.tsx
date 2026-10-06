@@ -357,15 +357,22 @@ export const AccountsManager: React.FC = () => {
           <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 space-y-1">
             <p className="font-semibold flex items-center gap-1.5 text-indigo-950">
               <Laptop className="w-4 h-4 text-indigo-600" />
-              Jendela Chromium telah dibuka di layar Anda!
+              Jendela Google Chrome / Browser telah dibuka di layar Anda!
             </p>
             <p className="text-[11px] text-indigo-800">
-              1. Beralih ke jendela browser Chromium yang baru muncul (atau cek icon Chrome baru di taskbar Windows).<br />
+              1. Beralih ke jendela browser baru yang muncul di desktop atau taskbar Windows Anda.<br />
               2. Masukkan username & password akun Threads Anda.<br />
-              3. Setelah berhasil masuk ke beranda Threads, kembali ke sini dan klik tombol hijau <strong>&quot;Selesai Login &amp; Simpan Sesi&quot;</strong> di atas.
+              3. Setelah berhasil masuk ke beranda Threads, klik tombol hijau <strong>&quot;Selesai Login &amp; Simpan Sesi&quot;</strong> di atas.
             </p>
           </div>
         )}
+
+        <div className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-1">
+          <Laptop className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+          <span>
+            <strong>Opsi Alternatif:</strong> Anda juga dapat membuka Windows Explorer di folder project ini dan klik ganda file <code className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono text-[10px]">login-threads.bat</code> untuk login langsung.
+          </span>
+        </div>
 
         {browserFeedback && (
           <div
