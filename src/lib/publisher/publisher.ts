@@ -23,38 +23,8 @@ export interface PublishResult {
 export async function publishPostToPlatform(payload: PublishPayload): Promise<PublishResult> {
   const { platform, accessToken, username, mainContent, replyContent, isSandbox } = payload;
 
-  // 1. Check if this is a Playwright Browser Automation account
-  if (platform === "THREADS_BROWSER" || accessToken === "playwright_browser_session") {
-    const replyParts = replyContent
-      ? replyContent
-          .split(/\n\s*---\s*\n/)
-          .map((p) => p.trim())
-          .filter(Boolean)
-      : [];
-
-    const browserRes = await postThreadViaPlaywright({
-      username: username || "my_threads_account",
-      mainText: mainContent,
-      replyParts,
-      headless: true,
-    });
-
-    if (browserRes.success) {
-      return {
-        success: true,
-        externalMainId: `pw_threads_${Date.now()}`,
-        details: { mode: "playwright_browser", message: browserRes.message },
-      };
-    } else {
-      return {
-        success: false,
-        error: browserRes.error || "Gagal memposting via Playwright Browser.",
-      };
-    }
-  }
-
-  // 2. Sandbox Mode Simulation
-  if (isSandbox || (process.env.NODE_ENV === "development" && !accessToken)) {
+  // 1. Sandbox Mode Simulation
+  if (isSandbox || accessToken === "sandbox_mode_mock_token") {
     console.log(`[Publisher Sandbox] Simulating post to ${platform}:`, {
       main: mainContent.slice(0, 60) + "...",
       reply: replyContent ? replyContent.slice(0, 60) + "..." : null,
@@ -71,10 +41,13 @@ export async function publishPostToPlatform(payload: PublishPayload): Promise<Pu
     };
   }
 
+  // 2. Platform Adapters
   switch (platform) {
     case "THREADS":
+    case "THREADS_BROWSER":
       return publishToThreads(payload);
     case "TWITTER":
+    case "TWITTER_BROWSER":
       return publishToTwitter(payload);
     default:
       return {
@@ -84,125 +57,48 @@ export async function publishPostToPlatform(payload: PublishPayload): Promise<Pu
   }
 }
 
-import { postMetaEndpoint } from "@/lib/threads/meta-fetch";
-
 /**
- * Threads API Publisher (Official Meta Graph API)
- * Flow:
- * 1. Create Threads Container for Main Post
- * 2. Publish Main Post
- * 3. Create Threads Container for Reply Post (with reply_to_id)
- * 4. Publish Reply Post
+ * Threads Publisher (Direct Browser Automation via Playwright)
+ * Posts directly without requiring Meta Developer API App or Tokens.
  */
 async function publishToThreads(payload: PublishPayload): Promise<PublishResult> {
-  const { accessToken, platformUserId, mainContent, replyContent } = payload;
-  const userId = platformUserId || "me";
+  const { username, mainContent, replyContent } = payload;
 
-  try {
-    // 1. Create Main Post Container
-    const mainContainerUrl = `https://graph.threads.net/v1.0/${userId}/threads`;
-    const mainContainerParams = new URLSearchParams({
-      media_type: "TEXT",
-      text: mainContent,
-      access_token: accessToken,
-    });
-
-    const { ok: containerOk, data: mainContainerData } = await postMetaEndpoint(
-      mainContainerUrl,
-      mainContainerParams
-    );
-
-    if (!containerOk || !mainContainerData?.id) {
-      return {
-        success: false,
-        error: mainContainerData?.error?.message || "Failed to create Threads main post container",
-        details: mainContainerData,
-      };
-    }
-
-    // 2. Publish Main Post
-    const publishUrl = `https://graph.threads.net/v1.0/${userId}/threads_publish`;
-    const publishParams = new URLSearchParams({
-      creation_id: mainContainerData.id,
-      access_token: accessToken,
-    });
-
-    const { ok: publishOk, data: publishData } = await postMetaEndpoint(publishUrl, publishParams);
-
-    if (!publishOk || !publishData?.id) {
-      return {
-        success: false,
-        error: publishData?.error?.message || "Failed to publish Threads main post",
-        details: publishData,
-      };
-    }
-
-    const publishedMainId = publishData.id;
-    let lastPublishedId = publishedMainId;
-    let publishedReplyId: string | undefined;
-
-    // 3. Publish Reply Post(s) in Sequence (Chained Thread)
-    if (replyContent && replyContent.trim().length > 0) {
-      // Split by multi-part delimiter or treat as single reply
-      const replyParts = replyContent
-        .split(/\n\s*---\s*\n/)
-        .map((p) => p.trim())
-        .filter(Boolean);
-
-      for (let i = 0; i < replyParts.length; i++) {
-        const partText = replyParts[i];
-        if (!partText) continue;
-
-        // Small delay between chained posts to respect platform rate limit
-        if (i > 0) {
-          await new Promise((r) => setTimeout(r, 600));
-        }
-
-        const replyContainerParams = new URLSearchParams({
-          media_type: "TEXT",
-          text: partText,
-          reply_to_id: lastPublishedId,
-          access_token: accessToken,
-        });
-
-        const { ok: replyContainerOk, data: replyContainerData } = await postMetaEndpoint(
-          mainContainerUrl,
-          replyContainerParams
-        );
-
-        if (replyContainerOk && replyContainerData?.id) {
-          const publishReplyParams = new URLSearchParams({
-            creation_id: replyContainerData.id,
-            access_token: accessToken,
-          });
-
-          const { ok: replyPublishOk, data: publishReplyData } = await postMetaEndpoint(
-            publishUrl,
-            publishReplyParams
-          );
-
-          if (replyPublishOk && publishReplyData?.id) {
-            lastPublishedId = publishReplyData.id;
-            if (!publishedReplyId) {
-              publishedReplyId = publishReplyData.id;
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      success: true,
-      externalMainId: publishedMainId,
-      externalReplyId: publishedReplyId,
-      details: { platform: "THREADS", main: publishData, lastId: lastPublishedId },
-    };
-  } catch (err: any) {
+  if (!username) {
     return {
       success: false,
-      error: err.message || "Unexpected error publishing to Threads",
+      error: "Username Threads diperlukan untuk browser automation.",
     };
   }
+
+  // Parse multi-part replies if chained
+  const replyParts = replyContent
+    ? replyContent
+        .split(/\n\s*---\s*\n/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+    : [];
+
+  const result = await postThreadViaPlaywright({
+    username,
+    mainText: mainContent,
+    replyParts,
+    headless: true,
+  });
+
+  if (result.success) {
+    return {
+      success: true,
+      externalMainId: `pw_threads_${Date.now()}`,
+      externalReplyId: replyParts.length > 0 ? `pw_reply_${Date.now()}` : undefined,
+      details: { engine: "playwright_browser", message: result.message },
+    };
+  }
+
+  return {
+    success: false,
+    error: result.error || "Gagal memposting ke Threads via Browser Playwright.",
+  };
 }
 
 /**

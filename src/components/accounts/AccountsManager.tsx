@@ -32,7 +32,6 @@ interface TestStatus {
   success: boolean;
   message: string;
   username?: string;
-  metaUserId?: string;
 }
 
 export const AccountsManager: React.FC = () => {
@@ -44,14 +43,11 @@ export const AccountsManager: React.FC = () => {
   // Testing states
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus | null>(null);
-  const [modalTesting, setModalTesting] = useState(false);
-  const [modalTestMsg, setModalTestMsg] = useState<{ success: boolean; text: string } | null>(null);
 
   // Form states
   const [platform, setPlatform] = useState<string>("THREADS");
   const [username, setUsername] = useState("");
   const [accountName, setAccountName] = useState("");
-  const [accessToken, setAccessToken] = useState("");
   const [isSandbox, setIsSandbox] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -91,7 +87,7 @@ export const AccountsManager: React.FC = () => {
       if (data.success) {
         setBrowserFeedback({
           success: true,
-          msg: data.message || "Sesi browser berhasil disimpan!",
+          msg: data.message || "Sesi browser berhasil disimpan dan akun terhubung!",
         });
         loadAccounts();
       } else {
@@ -124,70 +120,38 @@ export const AccountsManager: React.FC = () => {
     }
   }
 
-  async function handleTestConnection(accId: string) {
+  async function handleTestConnection(accId: string, accUsername: string, accPlatform: string) {
     setTestingId(accId);
     setTestStatus(null);
     try {
       const res = await fetch("/api/accounts/test", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ accountId: accId }),
+        body: JSON.stringify({ accountId: accId, username: accUsername, platform: accPlatform }),
       });
       const data = await res.json();
       if (data.success) {
         setTestStatus({
           id: accId,
           success: true,
-          message: data.message || "Koneksi berhasil diverifikasi!",
+          message: data.message || "Koneksi & status sesi browser aktif!",
           username: data.username,
         });
       } else {
         setTestStatus({
           id: accId,
           success: false,
-          message: data.error || "Gagal menghubungi server Meta Threads.",
+          message: data.error || "Sesi browser belum aktif.",
         });
       }
     } catch (e: any) {
       setTestStatus({
         id: accId,
         success: false,
-        message: e.message || "Terjadi kesalahan saat menguji koneksi.",
+        message: e.message || "Terjadi kesalahan saat menguji koneksi sesi browser.",
       });
     } finally {
       setTestingId(null);
-    }
-  }
-
-  async function handleTestModalToken() {
-    if (!accessToken.trim()) return;
-    setModalTesting(true);
-    setModalTestMsg(null);
-    try {
-      const res = await fetch("/api/accounts/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ accessToken, platform }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setModalTestMsg({
-          success: true,
-          text: data.message || `Token Valid! Terhubung ke @${data.username || "Threads"}`,
-        });
-      } else {
-        setModalTestMsg({
-          success: false,
-          text: data.error || "Token tidak valid atau izin Threads belum aktif.",
-        });
-      }
-    } catch (e: any) {
-      setModalTestMsg({
-        success: false,
-        text: e.message || "Gagal menguji token.",
-      });
-    } finally {
-      setModalTesting(false);
     }
   }
 
@@ -204,7 +168,7 @@ export const AccountsManager: React.FC = () => {
           platform,
           username,
           accountName: accountName || username,
-          accessToken: isSandbox ? "sandbox_mode_mock_token" : accessToken,
+          accessToken: isSandbox ? "sandbox_mode_mock_token" : "browser_session_auth",
         }),
       });
 
@@ -213,9 +177,7 @@ export const AccountsManager: React.FC = () => {
         setShowAddModal(false);
         setUsername("");
         setAccountName("");
-        setAccessToken("");
         setIsSandbox(true);
-        setModalTestMsg(null);
         loadAccounts();
       }
     } catch (e) {
@@ -254,22 +216,19 @@ export const AccountsManager: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-600" />
-            Social Media Accounts (Threads, IG & Facebook)
+            Social Media Accounts (Threads, X / Twitter)
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Hubungkan akun Threads (Meta Graph API), Instagram, Facebook, atau gunakan Sandbox Mode untuk auto-posting.
+            Hubungkan akun Threads kamu langsung via Browser Automation (Playwright) atau gunakan Sandbox Mode tanpa memerlukan API Token yang rumit.
           </p>
         </div>
 
         <button
-          onClick={() => {
-            setShowAddModal(true);
-            setModalTestMsg(null);
-          }}
+          onClick={() => setShowAddModal(true)}
           className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          + Connect Social Account (Token / Sandbox)
+          + Tambah Akun Manual / Sandbox
         </button>
       </div>
 
@@ -283,14 +242,14 @@ export const AccountsManager: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold text-slate-900">
-                  Browser Automation Mode (Playwright Chromium)
+                  Login Cepat Threads (Browser Automation Playwright)
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                  Bypass Token API
+                  Tanpa Token API
                 </span>
               </div>
               <p className="text-xs text-slate-600 mt-0.5 max-w-xl">
-                Login akun Threads kamu sekali via jendela browser Chromium Playwright di komputer ini. Sesi login (cookies & localStorage) akan tersimpan permanen di folder profil untuk auto-posting otomatis tanpa perlu Meta Developer App Token.
+                Cukup ketik username Threads kamu, lalu klik tombol di bawah untuk membuka jendela Chromium. Login manual sekali dan sesi auto-posting tersimpan permanen di komputer ini.
               </p>
             </div>
           </div>
@@ -302,7 +261,7 @@ export const AccountsManager: React.FC = () => {
               type="text"
               value={browserUsername}
               onChange={(e) => setBrowserUsername(e.target.value)}
-              placeholder="Masukkan username Threads (e.g. kenzie_threads)"
+              placeholder="Username Threads (misal: pintulangitketujuh)"
               className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-indigo-500 font-mono shadow-2xs"
             />
           </div>
@@ -355,17 +314,8 @@ export const AccountsManager: React.FC = () => {
           <Users className="w-8 h-8 text-slate-300 mx-auto" />
           <p className="text-xs font-semibold text-slate-800">Belum ada akun sosial media yang terhubung</p>
           <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-            Hubungkan akun Threads, Instagram, atau Facebook kamu (atau gunakan mode Sandbox) untuk mulai menjadwalkan auto-posting.
+            Gunakan form di atas untuk login Threads via Playwright Browser atau tambahkan akun Sandbox untuk mulai menjadwalkan auto-posting.
           </p>
-          <button
-            onClick={() => {
-              setShowAddModal(true);
-              setModalTestMsg(null);
-            }}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> Tambah Akun Threads / IG Sekarang
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -389,7 +339,7 @@ export const AccountsManager: React.FC = () => {
                       }`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      {isSandboxAcc ? "SANDBOX" : "LIVE ACTIVE"}
+                      {isSandboxAcc ? "SANDBOX" : "BROWSER ACTIVE"}
                     </span>
                     <button
                       onClick={() => handleDeleteAccount(acc.id)}
@@ -422,7 +372,7 @@ export const AccountsManager: React.FC = () => {
 
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                   <button
-                    onClick={() => handleTestConnection(acc.id)}
+                    onClick={() => handleTestConnection(acc.id, acc.username, acc.platform)}
                     disabled={testingId === acc.id}
                     className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
                   >
@@ -431,7 +381,7 @@ export const AccountsManager: React.FC = () => {
                     ) : (
                       <Zap className="w-3.5 h-3.5 text-amber-500" />
                     )}
-                    Tes Koneksi
+                    Tes Sesi Browser
                   </button>
 
                   <span className="text-[11px] text-slate-500 font-medium">
@@ -451,7 +401,7 @@ export const AccountsManager: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-4 h-4 text-indigo-600" />
-                Hubungkan Akun Sosial Media
+                Tambah Akun Sosial Media
               </h3>
               <button
                 onClick={() => setShowAddModal(false)}
@@ -471,10 +421,10 @@ export const AccountsManager: React.FC = () => {
                   onChange={(e) => setPlatform(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-medium"
                 >
-                  <option value="THREADS">Threads (Meta Graph API)</option>
+                  <option value="THREADS">Threads</option>
+                  <option value="TWITTER">Twitter / X</option>
                   <option value="INSTAGRAM">Instagram</option>
                   <option value="FACEBOOK">Facebook</option>
-                  <option value="TWITTER">Twitter / X (API v2)</option>
                   <option value="TIKTOK">TikTok</option>
                 </select>
               </div>
@@ -501,7 +451,7 @@ export const AccountsManager: React.FC = () => {
                   type="text"
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="e.g. Edogawa Threads Utama"
+                  placeholder="e.g. Akun Threads Utama"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500"
                 />
               </div>
@@ -521,58 +471,10 @@ export const AccountsManager: React.FC = () => {
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   {isSandbox
-                    ? "Mode aman: simulasi posting tanpa memerlukan live token developer resmi Meta."
-                    : "Mode live: posting otomatis langsung ke server resmi Meta Threads menggunakan Access Token."}
+                    ? "Mode aman: simulasi posting tanpa membuka browser Chromium nyata."
+                    : "Mode live: posting otomatis langsung ke akun melalui sesi Browser Chromium."}
                 </p>
               </div>
-
-              {!isSandbox && (
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Meta API Access Token *
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      required
-                      type="password"
-                      value={accessToken}
-                      onChange={(e) => setAccessToken(e.target.value)}
-                      placeholder="EAAX..."
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-indigo-500 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleTestModalToken}
-                      disabled={modalTesting || !accessToken.trim()}
-                      className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs font-semibold flex items-center gap-1 cursor-pointer shrink-0"
-                    >
-                      {modalTesting ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      )}
-                      Tes Token
-                    </button>
-                  </div>
-
-                  {modalTestMsg && (
-                    <div
-                      className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
-                        modalTestMsg.success
-                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                          : "bg-rose-50 text-rose-800 border border-rose-200"
-                      }`}
-                    >
-                      {modalTestMsg.success ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      ) : (
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                      )}
-                      <span>{modalTestMsg.text}</span>
-                    </div>
-                  )}
-                </div>
-              )}
 
               <div className="pt-3 flex gap-2 justify-end">
                 <button
@@ -587,7 +489,7 @@ export const AccountsManager: React.FC = () => {
                   disabled={saving}
                   className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
-                  {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Hubungkan Akun"}
+                  {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : "Simpan Akun"}
                 </button>
               </div>
             </form>
