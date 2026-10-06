@@ -19,8 +19,14 @@ import {
   RefreshCw,
   UserCheck,
   ShieldAlert,
+  Database,
+  Download,
+  UploadCloud,
+  FileJson,
+  CheckCircle2,
+  HardDrive,
 } from "lucide-react";
-import { getCurrentUser, LoggedInUser } from "@/lib/auth";
+import { getCurrentUser, LoggedInUser, getAuthHeaders } from "@/lib/auth";
 
 interface SystemUser {
   id: string;
@@ -32,12 +38,23 @@ interface SystemUser {
 }
 
 export const SettingsManager: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"USERS" | "SYSTEM">("USERS");
+  const [activeTab, setActiveTab] = useState<"USERS" | "SYSTEM" | "BACKUP">("USERS");
 
   // User Management States
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [currentUser, setCurrentUser] = useState<LoggedInUser | null>(null);
+
+  // Backup & Restore States
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restorePreview, setRestorePreview] = useState<any | null>(null);
+  const [restoreFeedback, setRestoreFeedback] = useState<{
+    success: boolean;
+    msg: string;
+    stats?: any;
+  } | null>(null);
 
   // User Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -239,6 +256,129 @@ export const SettingsManager: React.FC = () => {
     setTimeout(() => setSavedConfig(false), 2500);
   }
 
+  // Backup & Restore Handlers
+  async function handleDownloadBackup() {
+    setBackupLoading(true);
+    setRestoreFeedback(null);
+    try {
+      const res = await fetch("/api/database/backup", {
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setRestoreFeedback({
+          success: false,
+          msg: err.error || "Gagal mengunduh file backup database.",
+        });
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      a.download = `affiliatepost-backup-${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      setRestoreFeedback({
+        success: true,
+        msg: "✅ Backup database berhasil diunduh dan disimpan di komputer Anda!",
+      });
+    } catch (e: any) {
+      setRestoreFeedback({
+        success: false,
+        msg: e.message || "Terjadi kesalahan saat mendownload backup.",
+      });
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setRestoreFeedback(null);
+    if (!file) {
+      setRestoreFile(null);
+      setRestorePreview(null);
+      return;
+    }
+
+    setRestoreFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+        if (typeof parsed !== "object" || parsed === null) {
+          throw new Error("Format file bukan objek JSON yang valid.");
+        }
+        setRestorePreview(parsed);
+      } catch (err: any) {
+        setRestoreFeedback({
+          success: false,
+          msg: `File tidak valid: ${err.message}`,
+        });
+        setRestorePreview(null);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  async function handleExecuteRestore() {
+    if (!restorePreview) return;
+
+    if (
+      !confirm(
+        "Apakah Anda yakin ingin memulihkan (restore) database dari file ini? Data yang ada di sistem akan digantikan dengan isi file backup."
+      )
+    ) {
+      return;
+    }
+
+    setRestoreLoading(true);
+    setRestoreFeedback(null);
+
+    try {
+      const res = await fetch("/api/database/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify(restorePreview),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setRestoreFeedback({
+          success: true,
+          msg: `✅ ${data.message || "Database berhasil dipulihkan!"}`,
+          stats: data.stats,
+        });
+        setRestoreFile(null);
+        setRestorePreview(null);
+        loadUsers();
+      } else {
+        setRestoreFeedback({
+          success: false,
+          msg: data.error || "Gagal me-restore database.",
+        });
+      }
+    } catch (e: any) {
+      setRestoreFeedback({
+        success: false,
+        msg: e.message || "Terjadi kesalahan saat memulihkan database.",
+      });
+    } finally {
+      setRestoreLoading(false);
+    }
+  }
+
+  const isAdmin = currentUser?.role === "ADMIN" || currentUser?.username === "kenzieganteng";
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
@@ -249,7 +389,7 @@ export const SettingsManager: React.FC = () => {
             Settings & Manajemen Akun
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Kelola user, ubah password login, dan konfigurasi API pihak ketiga (Meta & AI LLM).
+            Kelola user, ubah password login, konfigurasi API, dan backup/restore database.
           </p>
         </div>
 
@@ -264,7 +404,7 @@ export const SettingsManager: React.FC = () => {
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            Manajemen User & Password
+            User & Password
           </button>
           <button
             onClick={() => setActiveTab("SYSTEM")}
@@ -275,7 +415,21 @@ export const SettingsManager: React.FC = () => {
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            API & LLM Config
+            API & LLM
+          </button>
+          <button
+            onClick={() => setActiveTab("BACKUP")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === "BACKUP"
+                ? "bg-white text-indigo-700 shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            Backup & Restore
+            <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 text-[9px] font-bold uppercase font-mono">
+              Admin
+            </span>
           </button>
         </div>
       </div>
@@ -339,7 +493,7 @@ export const SettingsManager: React.FC = () => {
                             <span
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono ${
                                 u.role === "ADMIN"
-                                  ? "bg-purple-50 text-purple-700 border border-purple-200"
+                                   ? "bg-purple-50 text-purple-700 border border-purple-200"
                                   : "bg-slate-100 text-slate-700 border border-slate-200"
                               }`}
                             >
@@ -462,6 +616,213 @@ export const SettingsManager: React.FC = () => {
             </button>
           </div>
         </form>
+      )}
+
+      {/* TAB 3: BACKUP & RESTORE DATABASE (ADMIN ONLY) */}
+      {activeTab === "BACKUP" && (
+        <div className="space-y-6 animate-fadeIn">
+          {!isAdmin ? (
+            <div className="p-8 rounded-2xl bg-white border border-slate-200 text-center space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">Akses Terbatas (Khusus Administrator)</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                Hanya akun dengan hak akses <strong>ADMIN</strong> yang diizinkan untuk membuat cadangan (backup) dan memulihkan (restore) database sistem.
+              </p>
+              <div className="pt-2">
+                <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-bold uppercase">
+                  Peran Anda saat ini: {currentUser?.role || "MEMBER"}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Feedback Alert */}
+              {restoreFeedback && (
+                <div
+                  className={`p-4 rounded-2xl text-xs flex items-start gap-3 border ${
+                    restoreFeedback.success
+                      ? "bg-emerald-50 text-emerald-900 border-emerald-200"
+                      : "bg-rose-50 text-rose-900 border-rose-200"
+                  }`}
+                >
+                  {restoreFeedback.success ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-1">
+                    <p className="font-bold">{restoreFeedback.msg}</p>
+                    {restoreFeedback.stats && (
+                      <div className="text-[11px] text-emerald-800 space-y-0.5 pt-1 font-mono">
+                        <div>• Produk: {restoreFeedback.stats.products} item</div>
+                        <div>• Link Afiliasi: {restoreFeedback.stats.links} link</div>
+                        <div>• Akun Sosial: {restoreFeedback.stats.accounts} akun</div>
+                        <div>• Antrean Postingan: {restoreFeedback.stats.posts} post</div>
+                        <div>• Pengguna Sistem: {restoreFeedback.stats.users} user</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Card 1: Download Backup */}
+              <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                      <Download className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">
+                        1. Download Cadangan Database (Backup)
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                        Unduh seluruh data aplikasi dalam format file <strong>.JSON</strong> yang dapat disimpan aman di komputer Anda atau dipindahkan ke perangkat lain.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-xs text-slate-600">
+                  <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <HardDrive className="w-3.5 h-3.5 text-indigo-600" />
+                    Data yang dicadangkan meliputi:
+                  </p>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-slate-600 list-disc list-inside">
+                    <li>Katalog Produk & Keresahan / USPs</li>
+                    <li>Short URL & Link Afiliasi Shopee</li>
+                    <li>Sesi Akun Sosial Media Threads</li>
+                    <li>Antrean & Riwayat Publikasi Post</li>
+                    <li>Daftar User & Kredensial Login</li>
+                  </ul>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    disabled={backupLoading}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {backupLoading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Membuat File Backup...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" />
+                        Download Backup (.JSON)
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 2: Restore Database */}
+              <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+                    <UploadCloud className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      2. Pulihkan Database dari File (Restore)
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Pilih file backup <strong>.JSON</strong> hasil unduhan sebelumnya untuk mengembalikan seluruh produk, link, akun, dan postingan.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl p-6 text-center transition-all bg-slate-50/50">
+                  <FileJson className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
+                  <label className="cursor-pointer">
+                    <span className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-bold inline-block shadow-2xs transition-all">
+                      {restoreFile ? "Ganti File Backup" : "Pilih File Backup (.JSON)"}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    {restoreFile ? (
+                      <span className="text-indigo-700 font-bold font-mono">
+                        {restoreFile.name} ({(restoreFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    ) : (
+                      "Hanya menerima file berformat .json"
+                    )}
+                  </p>
+                </div>
+
+                {/* Preview Box if Valid File Loaded */}
+                {restorePreview && (
+                  <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-200 space-y-2 animate-fadeIn">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-purple-600" />
+                        File Valid & Siap Dipulihkan
+                      </span>
+                      <span className="text-[10px] font-mono text-purple-700">
+                        {restorePreview.backupDate ? `Dibuat: ${new Date(restorePreview.backupDate).toLocaleString()}` : "Backup File"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center pt-2">
+                      <div className="p-2 bg-white rounded-lg border border-purple-100">
+                        <div className="text-xs font-bold text-slate-900">{restorePreview.products?.length || 0}</div>
+                        <div className="text-[10px] text-slate-500">Produk</div>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-purple-100">
+                        <div className="text-xs font-bold text-slate-900">{restorePreview.links?.length || 0}</div>
+                        <div className="text-[10px] text-slate-500">Links</div>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-purple-100">
+                        <div className="text-xs font-bold text-slate-900">{restorePreview.accounts?.length || 0}</div>
+                        <div className="text-[10px] text-slate-500">Akun</div>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-purple-100">
+                        <div className="text-xs font-bold text-slate-900">{restorePreview.posts?.length || 0}</div>
+                        <div className="text-[10px] text-slate-500">Posts</div>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-purple-100">
+                        <div className="text-xs font-bold text-slate-900">{restorePreview.users?.length || 0}</div>
+                        <div className="text-[10px] text-slate-500">Users</div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleExecuteRestore}
+                        disabled={restoreLoading}
+                        className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {restoreLoading ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            Memulihkan Database...
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            Mulai Restore Database Sekarang
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* MODAL: TAMBAH USER BARU */}
