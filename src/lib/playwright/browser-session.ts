@@ -133,11 +133,7 @@ export async function verifyAndSaveSession(
         (c) => c.name === "sessionid" || c.name === "ds_user_id" || c.name === "auth_token"
       );
 
-      const currentUrl = active.page.url();
-      const isAuthed =
-        hasAuthCookie ||
-        (!currentUrl.includes("/login") &&
-          (currentUrl.includes("threads.net") || currentUrl.includes("threads.com")));
+      const isAuthed = hasAuthCookie;
 
       if (isAuthed) {
         await active.context.storageState({ path: statePath });
@@ -196,6 +192,52 @@ export async function checkLoginStatus(
     loggedIn: false,
     message: `⚠️ Sesi login @${username} belum terautentikasi (cookie login belum ditemukan). Silakan klik 'Buka Browser Login Threads' dan login ke akun Threads Anda.`,
   };
+}
+
+function chunkTextForThreads(text: string, maxLen = 450): string[] {
+  if (!text || text.trim().length <= maxLen) return [text.trim()];
+
+  const paragraphs = text.split("\n\n").map(p => p.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const para of paragraphs) {
+    if ((current + "\n\n" + para).trim().length <= maxLen) {
+      current = current ? current + "\n\n" + para : para;
+    } else {
+      if (current) chunks.push(current.trim());
+      if (para.length > maxLen) {
+        const sentences = para.split(/(?<=[.!?])\s+/);
+        let subCurrent = "";
+        for (const s of sentences) {
+          if ((subCurrent + " " + s).trim().length <= maxLen) {
+            subCurrent = subCurrent ? subCurrent + " " + s : s;
+          } else {
+            if (subCurrent) chunks.push(subCurrent.trim());
+            if (s.length > maxLen) {
+              let rem = s;
+              while (rem.length > maxLen) {
+                const cutIdx = rem.lastIndexOf(" ", maxLen);
+                const safeCut = cutIdx > 0 ? cutIdx : maxLen;
+                chunks.push(rem.slice(0, safeCut).trim());
+                rem = rem.slice(safeCut).trim();
+              }
+              subCurrent = rem;
+            } else {
+              subCurrent = s;
+            }
+          }
+        }
+        current = subCurrent;
+      } else {
+        current = para;
+      }
+    }
+  }
+  if (current.trim()) {
+    chunks.push(current.trim());
+  }
+  return chunks.filter(Boolean);
 }
 
 /**
@@ -273,13 +315,15 @@ export async function postThreadViaPlaywright(options: {
       await textbox.click();
       await page.waitForTimeout(300);
       await page.keyboard.insertText(mainText);
+      await page.keyboard.press("Space");
+      await page.keyboard.press("Backspace");
       await page.waitForTimeout(1000);
 
       const postBtn = page
         .locator('div[role="button"]:has-text("Posting"), div[role="button"]:has-text("Post"), div[role="button"]:has-text("Kirim"), div[role="button"]:has-text("Balas"), button:has-text("Posting"), button:has-text("Post"), button:has-text("Kirim")');
 
       if (await postBtn.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-        await postBtn.first().click();
+        await postBtn.first().click({ force: true });
         await page.waitForTimeout(5000);
         await context.storageState({ path: statePath });
       } else {
@@ -292,6 +336,22 @@ export async function postThreadViaPlaywright(options: {
     }
 
     // 2. New Main Thread + Chained Replies Flow
+    // Sanitize all posts so NO single post ever exceeds 450 characters (Threads limit is 500)
+    const allPosts: string[] = [];
+    const mainChunks = chunkTextForThreads(mainText, 450);
+    allPosts.push(...mainChunks);
+
+    if (replyParts && replyParts.length > 0) {
+      for (const r of replyParts) {
+        if (!r.trim()) continue;
+        const rChunks = chunkTextForThreads(r, 450);
+        allPosts.push(...rChunks);
+      }
+    }
+
+    const firstPost = allPosts[0] || mainText;
+    const subsequentPosts = allPosts.slice(1);
+
     await page.goto("https://www.threads.net/", { waitUntil: "domcontentloaded", timeout: 25000 });
     await page.waitForTimeout(3000);
 
@@ -323,23 +383,29 @@ export async function postThreadViaPlaywright(options: {
     await textbox.waitFor({ state: "visible", timeout: 8000 });
     await textbox.click();
     await page.waitForTimeout(300);
-    await page.keyboard.insertText(mainText);
+    await page.keyboard.insertText(firstPost);
+    await page.keyboard.press("Space");
+    await page.keyboard.press("Backspace");
     await page.waitForTimeout(1000);
 
     // If multi-part replies exist, add chained replies
-    if (replyParts && replyParts.length > 0) {
-      for (const part of replyParts) {
+    if (subsequentPosts.length > 0) {
+      for (const part of subsequentPosts) {
         if (!part.trim()) continue;
 
         const addThreadBtn = page
-          .locator('text="Tambahkan ke utas"')
+          .locator('div[role="button"]:has-text("Tambahkan ke utas")')
+          .or(page.locator('div[role="button"]:has-text("Add to thread")'))
+          .or(page.locator('div[role="button"]:has-text("Tambah utas")'))
+          .or(page.locator('button:has-text("Tambahkan ke utas")'))
+          .or(page.locator('button:has-text("Add to thread")'))
+          .or(page.locator('text="Tambahkan ke utas"'))
           .or(page.locator('text="Add to thread"'))
-          .or(page.locator('text="Tambah utas"'))
           .or(page.locator('svg[aria-label="Tambahkan ke utas"]'))
           .or(page.locator('svg[aria-label="Add to thread"]'));
 
         if (await addThreadBtn.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-          await addThreadBtn.first().click();
+          await addThreadBtn.first().click({ timeout: 5000, force: true }).catch(() => {});
           await page.waitForTimeout(800);
         }
 
@@ -347,6 +413,8 @@ export async function postThreadViaPlaywright(options: {
         await lastTextbox.click();
         await page.waitForTimeout(300);
         await page.keyboard.insertText(part);
+        await page.keyboard.press("Space");
+        await page.keyboard.press("Backspace");
         await page.waitForTimeout(800);
       }
     }
@@ -356,7 +424,7 @@ export async function postThreadViaPlaywright(options: {
       .locator('div[role="button"]:has-text("Posting"), div[role="button"]:has-text("Post"), div[role="button"]:has-text("Kirim"), button:has-text("Posting"), button:has-text("Post"), button:has-text("Kirim")');
 
     if (await postBtn.first().isVisible({ timeout: 6000 }).catch(() => false)) {
-      await postBtn.first().click();
+      await postBtn.first().click({ timeout: 6000, force: true });
       await page.waitForTimeout(6000);
       await context.storageState({ path: statePath });
     } else {

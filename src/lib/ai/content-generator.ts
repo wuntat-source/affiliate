@@ -259,20 +259,24 @@ Format Output WAJIB JSON:
   const lines = rawText.split("\n").map(l => l.trim()).filter(Boolean);
   const firstLine = lines[0] || "Produk Rekomendasi";
   const title = firstLine.replace(/^(jual|promo|ready|diskon|murah)\s+/i, "").slice(0, 60);
+  const rawUsp = lines.slice(1, 3).join(", ") || "Material berkualitas, awet, dan multifungsi";
+  const safeUsp = rawUsp.length > 150 ? rawUsp.slice(0, 147).trim() + "..." : rawUsp;
 
   return {
     productName: title,
     category: "General",
     painPoints: `Sering kerepotan atau butuh solusi praktis untuk kebutuhan harian`,
-    usps: lines.slice(1, 3).join(", ") || "Material berkualitas, awet, dan multifungsi",
+    usps: safeUsp,
     suggestedTone: "CASUAL_CURHAT",
   };
 }
 
 function generateFallbackContent(req: AIContentRequest): AIContentResponse {
   const link = req.affiliateUrl || "{link_afiliasi}";
-  const pain = req.painPoints || "sering kerepotan dengan urusan harian";
-  const usp = req.usps || "kualitasnya premium dan fungsional banget";
+  const rawPain = req.painPoints || "sering kerepotan dengan urusan harian";
+  const pain = rawPain.length > 120 ? rawPain.slice(0, 117).trim() + "..." : rawPain;
+  const rawUsp = req.usps || "kualitasnya premium dan fungsional banget";
+  const usp = rawUsp.length > 150 ? rawUsp.slice(0, 147).trim() + "..." : rawUsp;
   const threadCount = req.threadLength && req.threadLength > 1 ? req.threadLength : 1;
 
   if (threadCount >= 3) {
