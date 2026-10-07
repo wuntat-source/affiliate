@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOrUpdateAffiliateLink } from "@/lib/links/link-service";
-import { mockStore, MockLink, saveStoreToDisk } from "@/lib/mock-store";
+import { mockStore, MockLink } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
@@ -21,9 +21,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: links });
     } catch {
       // Admin sees all links; Members only see their own
+      const allLinks = mockStore.links;
       const filtered = userCtx.isAdmin
-        ? mockStore.links
-        : mockStore.links.filter(
+        ? allLinks
+        : allLinks.filter(
             (l) => (l.userId || "usr_admin_kenzie") === userCtx.userId
           );
       return NextResponse.json({ success: true, data: filtered });
@@ -64,7 +65,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: link });
     } catch {
       const shortCode = customSlug?.trim() || nanoid(7);
-      const product = mockStore.products.find(
+      const allProducts = mockStore.products;
+      const product = allProducts.find(
         (p) => p.id === productId && (userCtx.isAdmin || (p.userId || "usr_admin_kenzie") === userCtx.userId)
       ) || {
         id: productId,
@@ -83,15 +85,15 @@ export async function POST(request: NextRequest) {
         utmSource: utmSource || "threads_curhat",
         totalClicks: 0,
         _count: { clicks: 0, posts: 0 },
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       };
 
-      mockStore.links.unshift(newLink);
+      const currentLinks = [...mockStore.links];
+      mockStore.links = [newLink, ...currentLinks];
 
       // Attach link to product object
-      const targetProd = mockStore.products.find(
-        (p) => p.id === productId
-      );
+      const currentProducts = [...mockStore.products];
+      const targetProd = currentProducts.find((p) => p.id === productId);
       if (targetProd) {
         if (!targetProd.affiliateLinks) targetProd.affiliateLinks = [];
         targetProd.affiliateLinks.unshift({
@@ -100,9 +102,9 @@ export async function POST(request: NextRequest) {
           originalUrl: newLink.originalUrl,
           platform: newLink.platform,
         });
+        mockStore.products = currentProducts;
       }
 
-      saveStoreToDisk();
       return NextResponse.json({ success: true, data: newLink });
     }
   } catch (error: any) {
@@ -129,20 +131,22 @@ export async function DELETE(request: NextRequest) {
       });
       return NextResponse.json({ success: true });
     } catch {
-      const index = mockStore.links.findIndex(
+      const currentLinks = [...mockStore.links];
+      const index = currentLinks.findIndex(
         (l) => l.id === id && (userCtx.isAdmin || (l.userId || "usr_admin_kenzie") === userCtx.userId)
       );
       if (index !== -1) {
-        const deletedLink = mockStore.links[index];
-        mockStore.links.splice(index, 1);
+        const deletedLink = currentLinks[index];
+        currentLinks.splice(index, 1);
+        mockStore.links = currentLinks;
 
         // Remove from product's affiliateLinks array too
-        const targetProd = mockStore.products.find((p) => p.id === deletedLink.productId);
+        const currentProducts = [...mockStore.products];
+        const targetProd = currentProducts.find((p) => p.id === deletedLink.productId);
         if (targetProd && targetProd.affiliateLinks) {
           targetProd.affiliateLinks = targetProd.affiliateLinks.filter((l) => l.id !== id);
+          mockStore.products = currentProducts;
         }
-
-        saveStoreToDisk();
       }
       return NextResponse.json({ success: true });
     }

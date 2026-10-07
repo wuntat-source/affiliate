@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     } catch {
       const allAccounts = mockStore.accounts;
 
-      // Admin sees all accounts; Members see only their own
+      // Admin sees all accounts; Members only see their own
       let filtered = userCtx.isAdmin
         ? allAccounts
         : allAccounts.filter(
@@ -206,14 +206,28 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true });
     } catch {
       const current = [...mockStore.accounts];
-      const index = current.findIndex(
+      const target = current.find(
         (a) => a.id === id && (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
       );
-      if (index !== -1) {
-        current.splice(index, 1);
-        mockStore.accounts = current;
+
+      if (target) {
+        // Remove from accounts store
+        mockStore.accounts = current.filter((a) => a.id !== id);
+
+        // Remove disk session folder so syncSessionsFromDisk does not resurrect it
+        try {
+          const cleanUsername = target.username.trim().replace(/^@+/, "");
+          const safeName = `${target.platform.toLowerCase()}_${cleanUsername.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+          const dir = path.resolve(process.cwd(), ".sessions", safeName);
+          if (fs.existsSync(dir)) {
+            fs.rmSync(dir, { recursive: true, force: true });
+          }
+        } catch (e) {
+          console.error("[Account Session Dir Delete Error]:", e);
+        }
       }
-      return NextResponse.json({ success: true });
+
+      return NextResponse.json({ success: true, message: "Akun berhasil dihapus." });
     }
   } catch (error: any) {
     return NextResponse.json(

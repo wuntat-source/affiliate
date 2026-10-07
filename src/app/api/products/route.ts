@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { mockStore, MockProduct, saveStoreToDisk } from "@/lib/mock-store";
+import { mockStore, MockProduct } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: product });
     } catch {
+      const current = [...mockStore.products];
       const newMockProd: MockProduct = {
         id: `prod_${nanoid(6)}`,
         userId: userCtx.userId,
@@ -102,11 +103,10 @@ export async function POST(request: NextRequest) {
         description: description || null,
         affiliateLinks: [],
         _count: { posts: 0, aiDrafts: 0 },
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       };
 
-      mockStore.products.unshift(newMockProd);
-      saveStoreToDisk();
+      mockStore.products = [newMockProd, ...current];
       return NextResponse.json({ success: true, data: newMockProd });
     }
   } catch (error: any) {
@@ -133,17 +133,17 @@ export async function DELETE(request: NextRequest) {
       });
       return NextResponse.json({ success: true });
     } catch {
-      const index = mockStore.products.findIndex(
+      const currentProducts = [...mockStore.products];
+      const index = currentProducts.findIndex(
         (p) => p.id === id && (userCtx.isAdmin || (p.userId || "usr_admin_kenzie") === userCtx.userId)
       );
       if (index !== -1) {
-        const prod = mockStore.products[index];
-        mockStore.products.splice(index, 1);
+        currentProducts.splice(index, 1);
+        mockStore.products = currentProducts;
+
         // Also remove associated links
-        mockStore.links = mockStore.links.filter(
-          (l) => l.productId !== id
-        );
-        saveStoreToDisk();
+        const currentLinks = mockStore.links.filter((l) => l.productId !== id);
+        mockStore.links = currentLinks;
       }
       return NextResponse.json({ success: true });
     }

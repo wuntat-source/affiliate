@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { schedulePostJob } from "@/lib/queue/post-queue";
-import { mockStore, MockPost, saveStoreToDisk } from "@/lib/mock-store";
+import { mockStore, MockPost } from "@/lib/mock-store";
 import { getUserContext } from "@/lib/server-auth";
 import { nanoid } from "nanoid";
 
@@ -26,10 +26,12 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: posts });
     } catch {
+      const allPosts = mockStore.posts;
+
       // Admin sees all posts; Members only see their own
       let filtered = userCtx.isAdmin
-        ? mockStore.posts
-        : mockStore.posts.filter(
+        ? allPosts
+        : allPosts.filter(
             (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
           );
 
@@ -84,14 +86,17 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ success: true, data: post });
     } catch {
-      const account = mockStore.accounts.find(
+      const allAccounts = mockStore.accounts;
+      const account = allAccounts.find(
         (a) => a.id === accountId && (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
       ) || {
         platform: "THREADS",
         username: "curhat_gadget_daily",
       };
+
+      const allProducts = mockStore.products;
       const product = productId
-        ? mockStore.products.find(
+        ? allProducts.find(
             (p) => p.id === productId && (userCtx.isAdmin || (p.userId || "usr_admin_kenzie") === userCtx.userId)
           )
         : undefined;
@@ -107,16 +112,45 @@ export async function POST(request: NextRequest) {
         replyContent: replyContent || undefined,
         status: scheduledAt ? "SCHEDULED" : "DRAFT",
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       };
 
-      mockStore.posts.unshift(newPost);
-      saveStoreToDisk();
+      const currentPosts = [...mockStore.posts];
+      mockStore.posts = [newPost, ...currentPosts];
+
       return NextResponse.json({ success: true, data: newPost });
     }
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "Failed to create post" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    const userCtx = getUserContext(request);
+
+    if (!id) {
+      return NextResponse.json({ error: "Post ID is required" }, { status: 400 });
+    }
+
+    try {
+      await prisma.post.delete({ where: { id } });
+      return NextResponse.json({ success: true });
+    } catch {
+      const current = [...mockStore.posts];
+      mockStore.posts = current.filter(
+        (p) => !(p.id === id && (userCtx.isAdmin || (p.userId || "usr_admin_kenzie") === userCtx.userId))
+      );
+      return NextResponse.json({ success: true, message: "Postingan berhasil dihapus." });
+    }
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || "Failed to delete post" },
       { status: 500 }
     );
   }
