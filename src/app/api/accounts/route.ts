@@ -6,54 +6,35 @@ import { nanoid } from "nanoid";
 import fs from "fs";
 import path from "path";
 
-function syncSessionsFromDisk(userId: string) {
+async function syncSessionsFromDisk(userId: string) {
   try {
     const sessionsBase = path.resolve(process.cwd(), ".sessions");
     if (!fs.existsSync(sessionsBase)) return;
 
     const entries = fs.readdirSync(sessionsBase, { withFileTypes: true });
-    const currentAccounts = [...mockStore.accounts];
-    let modified = false;
 
     for (const entry of entries) {
       if (entry.isDirectory() && (entry.name.startsWith("threads_") || entry.name.startsWith("twitter_"))) {
         const statePath = path.join(sessionsBase, entry.name, "storage_state.json");
         if (fs.existsSync(statePath)) {
           const parts = entry.name.split("_");
-          const platform = parts[0].toUpperCase();
+          const platform = (parts[0].toUpperCase() === "TWITTER" ? "TWITTER" : "THREADS") as any;
           const username = parts.slice(1).join("_");
 
-          const existingIndex = currentAccounts.findIndex(
-            (a) =>
-              a.platform === platform &&
-              a.username.toLowerCase() === username.toLowerCase() &&
-              (a.userId || "usr_admin_kenzie") === userId
-          );
-
-          if (existingIndex === -1) {
-            const newAcc: MockAccount = {
-              id: `acc_disk_${nanoid(6)}`,
-              userId: userId,
-              platform: platform,
+          await prisma.account.upsert({
+            where: { platform_username: { platform, username } },
+            update: { status: "ACTIVE", userId },
+            create: {
+              userId,
+              platform,
               accountName: `@${username}`,
-              username: username,
+              username,
               accessToken: "browser_session_auth",
               status: "ACTIVE",
-              _count: { posts: 0 },
-              createdAt: new Date().toISOString(),
-            };
-            currentAccounts.unshift(newAcc);
-            modified = true;
-          } else if (currentAccounts[existingIndex].status !== "ACTIVE") {
-            currentAccounts[existingIndex].status = "ACTIVE";
-            modified = true;
-          }
+            },
+          });
         }
       }
-    }
-
-    if (modified) {
-      mockStore.accounts = currentAccounts;
     }
   } catch (err) {
     console.error("[Account Disk Sync Error]:", err);
@@ -65,10 +46,11 @@ export async function GET(request: NextRequest) {
     const userCtx = getUserContext(request);
 
     // Sync any existing disk sessions for current user
-    syncSessionsFromDisk(userCtx.userId);
+    await syncSessionsFromDisk(userCtx.userId);
 
     try {
       const accounts = await prisma.account.findMany({
+        where: userCtx.isAdmin ? {} : { userId: userCtx.userId },
         include: {
           _count: {
             select: { posts: true },

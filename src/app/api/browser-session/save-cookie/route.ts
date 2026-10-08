@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserContext } from "@/lib/server-auth";
-import { mockStore, MockAccount, saveStoreToDisk } from "@/lib/mock-store";
+import { prisma } from "@/lib/prisma";
 import { getStateJsonPath } from "@/lib/playwright/browser-session";
-import { nanoid } from "nanoid";
 import fs from "fs";
 import path from "path";
 
@@ -124,32 +123,30 @@ export async function POST(request: NextRequest) {
       )
     );
 
-    // Register / update account in mockStore
-    const current = [...mockStore.accounts];
-    const existing = current.find(
-      (a) =>
-        a.platform === platform &&
-        a.username.toLowerCase() === cleanUsername.toLowerCase() &&
-        (userCtx.isAdmin || (a.userId || "usr_admin_kenzie") === userCtx.userId)
-    );
-
-    if (!existing) {
-      const newAcc: MockAccount = {
-        id: `acc_browser_${nanoid(6)}`,
+    // Simpan ke database PostgreSQL
+    const platformEnum = platform.toUpperCase() === "TWITTER" ? "TWITTER" : "THREADS";
+    await prisma.account.upsert({
+      where: {
+        platform_username: {
+          platform: platformEnum as any,
+          username: cleanUsername,
+        },
+      },
+      update: {
         userId: userCtx.userId,
-        platform: platform,
+        status: "ACTIVE",
+        accessToken: "browser_session_auth",
+        accountName: `@${cleanUsername}`,
+      },
+      create: {
+        userId: userCtx.userId,
+        platform: platformEnum as any,
         accountName: `@${cleanUsername}`,
         username: cleanUsername,
         accessToken: "browser_session_auth",
         status: "ACTIVE",
-        _count: { posts: 0 },
-        createdAt: new Date().toISOString(),
-      };
-      mockStore.accounts = [newAcc, ...current];
-    } else {
-      existing.status = "ACTIVE";
-      mockStore.accounts = current;
-    }
+      },
+    });
 
     return NextResponse.json({
       success: true,

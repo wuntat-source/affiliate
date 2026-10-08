@@ -67,6 +67,7 @@ export const ViralReplier: React.FC = () => {
   // Trending Discovery States
   const [trendingNiche, setTrendingNiche] = useState<string>("ALL");
   const [trendingPosts, setTrendingPosts] = useState<TrendingPostItem[]>([]);
+  const [trendingLive, setTrendingLive] = useState(false);
   const [trendingLoading, setTrendingLoading] = useState(false);
 
   // Input states
@@ -138,6 +139,7 @@ export const ViralReplier: React.FC = () => {
       const data = await res.json();
       if (data.success && data.data) {
         setTrendingPosts(data.data);
+        setTrendingLive(!!data.live);
       }
     } catch (e) {
       console.error(e);
@@ -315,8 +317,17 @@ export const ViralReplier: React.FC = () => {
               <Compass className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 Radar Postingan Populer / Trending Hari Ini (Auto-Discovery)
+                {trendingLive ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">
+                    ● LIVE dari Threads
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                    Data contoh
+                  </span>
+                )}
               </h3>
               <p className="text-[11px] text-slate-500">
                 Pilih postingan yang sedang ramai di bawah ini untuk langsung membalas dengan link afiliasimu.

@@ -22,6 +22,9 @@ export interface AIContentResponse {
   modelUsed: string;
 }
 
+// Round-robin counter untuk rotasi Gemini <-> Groq
+let providerRotation = 0;
+
 const TONE_PROMPTS: Record<string, string> = {
   CASUAL_CURHAT: `
 Gaya: Soft-selling curhat Threads santai sehari-hari.
@@ -94,13 +97,62 @@ Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown format
 
   const geminiApiKey = req.apiKey || process.env.GEMINI_API_KEY;
   const openaiApiKey = req.apiKey || process.env.OPENAI_API_KEY;
+  const groqApiKey = process.env.GROQ_API_KEY;
 
-  // 1. Try Gemini if configured
-  if (geminiApiKey) {
+  // Tentukan urutan provider via round-robin: genap = Gemini dulu, ganjil = Groq dulu
+  const rotation = providerRotation++;
+  const tryGroqFirst = rotation % 2 === 1 && !!groqApiKey;
+
+  // Helper: panggil Groq (OpenAI-compatible)
+  const tryGroq = async (): Promise<AIContentResponse | null> => {
+    if (!groqApiKey) return null;
+    try {
+      const groq = new OpenAI({
+        apiKey: groqApiKey,
+        baseURL: "https://api.groq.com/openai/v1",
+      });
+      const completion = await groq.chat.completions.create({
+        model: "openai/gpt-oss-120b",
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.8,
+      });
+      const content = completion.choices[0]?.message?.content;
+      if (!content) return null;
+      const parsed = JSON.parse(content);
+      if (isMultiThread && Array.isArray(parsed.thread_posts) && parsed.thread_posts.length > 0) {
+        const posts: string[] = parsed.thread_posts;
+        return {
+          mainPost: posts[0] || "",
+          replyPost: posts.slice(1).join("\n\n---\n\n"),
+          threadPosts: posts,
+          characterCount: (posts[0] || "").length,
+          modelUsed: "groq/openai/gpt-oss-120b",
+        };
+      }
+      return {
+        mainPost: parsed.post_utama || "",
+        replyPost: parsed.post_balasan || "",
+        threadPosts: [parsed.post_utama, parsed.post_balasan].filter(Boolean),
+        characterCount: (parsed.post_utama || "").length,
+        modelUsed: "groq/openai/gpt-oss-120b",
+      };
+    } catch (err: any) {
+      console.warn("[AI Engine] Groq generation error:", err.message);
+      return null;
+    }
+  };
+
+  // Helper: panggil Gemini
+  const tryGemini = async (): Promise<AIContentResponse | null> => {
+    if (!geminiApiKey) return null;
     try {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
       const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.8,
@@ -121,7 +173,7 @@ Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown format
           replyPost,
           threadPosts: posts,
           characterCount: mainPost.length,
-          modelUsed: "gemini-1.5-flash",
+          modelUsed: "gemini-3-flash-preview",
         };
       }
 
@@ -130,11 +182,22 @@ Wajib berikan output HANYA dalam format JSON valid berikut tanpa markdown format
         replyPost: parsed.post_balasan || "",
         threadPosts: [parsed.post_utama, parsed.post_balasan].filter(Boolean),
         characterCount: (parsed.post_utama || "").length,
-        modelUsed: "gemini-1.5-flash",
+        modelUsed: "gemini-3-flash-preview",
       };
     } catch (err: any) {
-      console.warn("[AI Engine] Gemini generation error, attempting fallback:", err.message);
+      console.warn("[AI Engine] Gemini generation error:", err.message);
+      return null;
     }
+  };
+
+  // Eksekusi dengan rotasi: bergantian Gemini/Groq, fallback ke OpenAI, lalu template
+  const providers: Array<() => Promise<AIContentResponse | null>> = tryGroqFirst
+    ? [tryGroq, tryGemini]
+    : [tryGemini, tryGroq];
+
+  for (const fn of providers) {
+    const result = await fn();
+    if (result && result.mainPost) return result;
   }
 
   // 2. Try OpenAI if configured
@@ -212,7 +275,7 @@ Format Output WAJIB JSON:
     try {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
       const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         generationConfig: { responseMimeType: "application/json", temperature: 0.7 },
         systemInstruction,
       });

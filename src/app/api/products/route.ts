@@ -11,8 +11,10 @@ export async function GET(request: NextRequest) {
     const userCtx = getUserContext(request);
 
     try {
+      const userFilter = userCtx.isAdmin ? {} : { userId: userCtx.userId };
       const products = await prisma.product.findMany({
         where: {
+          ...userFilter,
           ...(search
             ? {
                 OR: [
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest) {
     try {
       const product = await prisma.product.create({
         data: {
+          userId: userCtx.userId,
           name,
           brand: brand || null,
           category: category || "General",

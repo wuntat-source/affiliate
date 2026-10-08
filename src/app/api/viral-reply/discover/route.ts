@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
+import {
+  scrapeThreadsSearch,
+  getKeywordsForNiche,
+  getNicheLabel,
+} from "@/lib/threads-scraper";
 
 export interface TrendingPostItem {
   id: string;
@@ -81,23 +86,59 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const niche = searchParams.get("niche") || "ALL";
 
+    // Coba ambil data asli dari Threads via scraper.
+    // Kalau gagal (timeout/blokir), fallback ke data contoh.
     let results: TrendingPostItem[] = [];
+    let isLive = false;
 
-    if (niche === "ALL") {
-      results = [
-        ...DEFAULT_TRENDING_FEEDS.WFC,
-        ...DEFAULT_TRENDING_FEEDS.GADGET,
-        ...DEFAULT_TRENDING_FEEDS.LIFESTYLE,
-      ];
-    } else if (DEFAULT_TRENDING_FEEDS[niche]) {
-      results = DEFAULT_TRENDING_FEEDS[niche];
-    } else {
-      results = DEFAULT_TRENDING_FEEDS.WFC;
+    try {
+      const keywords = getKeywordsForNiche(niche);
+      const scraped: TrendingPostItem[] = [];
+      for (const kw of keywords.slice(0, 3)) {
+        const posts = await scrapeThreadsSearch(kw, 4);
+        const nicheKey = niche === "ALL" ? nicheForKeyword(keywords, kw) : niche;
+        for (const p of posts) {
+          scraped.push({
+            id: p.id,
+            creator: p.creator,
+            handle: p.handle,
+            avatar: p.avatar,
+            content: p.content,
+            repliesCount: p.repliesCount,
+            likesCount: p.likesCount,
+            niche: getNicheLabel(nicheKey),
+            suggestedProduct: "",
+            suggestedPainPoint: "",
+          });
+        }
+        if (scraped.length >= 8) break;
+      }
+      if (scraped.length > 0) {
+        results = scraped;
+        isLive = true;
+      }
+    } catch (e) {
+      console.warn("[discover] scraper gagal, pakai data contoh:", (e as Error).message);
+    }
+
+    if (!isLive) {
+      if (niche === "ALL") {
+        results = [
+          ...DEFAULT_TRENDING_FEEDS.WFC,
+          ...DEFAULT_TRENDING_FEEDS.GADGET,
+          ...DEFAULT_TRENDING_FEEDS.LIFESTYLE,
+        ];
+      } else if (DEFAULT_TRENDING_FEEDS[niche]) {
+        results = DEFAULT_TRENDING_FEEDS[niche];
+      } else {
+        results = DEFAULT_TRENDING_FEEDS.WFC;
+      }
     }
 
     return NextResponse.json({
       success: true,
       data: results,
+      live: isLive,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -105,6 +146,15 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/** Tentukan niche asal untuk keyword (dipakai saat niche=ALL) */
+function nicheForKeyword(keywords: string[], kw: string): string {
+  const idx = keywords.indexOf(kw);
+  if (keywords.length === 3) {
+    return ["WFC", "GADGET", "LIFESTYLE"][idx] || "WFC";
+  }
+  return "WFC";
 }
 
 export async function POST(request: NextRequest) {

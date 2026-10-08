@@ -40,7 +40,11 @@ interface Account {
   accountName?: string;
 }
 
-export const AIStudio: React.FC = () => {
+interface AIStudioProps {
+  onViewQueue?: () => void;
+}
+
+export const AIStudio: React.FC<AIStudioProps> = ({ onViewQueue }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
@@ -744,8 +748,17 @@ export const AIStudio: React.FC = () => {
             {/* Queue & Publish Control Center */}
             <div className="pt-3 border-t border-slate-100 space-y-3">
               {queueSuccessMsg && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
-                  {queueSuccessMsg}
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center justify-between gap-2">
+                  <span>{queueSuccessMsg}</span>
+                  {onViewQueue && (
+                    <button
+                      type="button"
+                      onClick={onViewQueue}
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 transition-colors"
+                    >
+                      Lihat Antrean →
+                    </button>
+                  )}
                 </div>
               )}
 

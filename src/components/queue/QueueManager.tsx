@@ -7,6 +7,10 @@ import {
   RefreshCw,
   Clock,
   AlertTriangle,
+  Pencil,
+  Trash2,
+  X,
+  Save,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { getAuthHeaders } from "@/lib/auth";
@@ -28,12 +32,19 @@ export const QueueManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("ALL");
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<PostItem | null>(null);
+  const [editMain, setEditMain] = useState("");
+  const [editReply, setEditReply] = useState("");
+  const [editSchedule, setEditSchedule] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadPosts();
   }, [filter]);
 
   async function loadPosts() {
+    setLoading(true);
     try {
       const url = filter === "ALL" ? "/api/posts" : `/api/posts?status=${filter}`;
       const res = await fetch(url, { headers: getAuthHeaders() });
@@ -45,6 +56,68 @@ export const QueueManager: React.FC = () => {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function openEdit(p: PostItem) {
+    setEditingPost(p);
+    setEditMain(p.mainContent);
+    setEditReply(p.replyContent || "");
+    // Format datetime-local: YYYY-MM-DDTHH:mm
+    setEditSchedule(
+      p.scheduledAt
+        ? new Date(p.scheduledAt).toISOString().slice(0, 16)
+        : ""
+    );
+  }
+
+  async function handleSaveEdit() {
+    if (!editingPost) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/posts/${editingPost.id}`, {
+        method: "PUT",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mainContent: editMain,
+          replyContent: editReply,
+          scheduledAt: editSchedule || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingPost(null);
+        loadPosts();
+      } else {
+        alert(data.error || "Gagal menyimpan perubahan.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Gagal menyimpan perubahan.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Hapus postingan ini dari antrean? Tindakan ini tidak bisa dibatalkan.")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/posts/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      const data = await res.json();
+      if (data.success) {
+        loadPosts();
+      } else {
+        alert(data.error || "Gagal menghapus.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Gagal menghapus.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -189,7 +262,26 @@ export const QueueManager: React.FC = () => {
                 </div>
 
                 {p.status !== "PUBLISHED" && (
-                  <div className="pt-2 flex justify-end">
+                  <div className="pt-2 flex justify-end gap-2">
+                    <button
+                      onClick={() => openEdit(p)}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-2 border border-slate-200 shadow-xs transition-all cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      disabled={deletingId === p.id}
+                      className="px-4 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-600 text-xs font-semibold flex items-center gap-2 border border-slate-200 hover:border-rose-200 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {deletingId === p.id ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      Hapus
+                    </button>
                     <button
                       onClick={() => handlePublishImmediate(p.id)}
                       disabled={isPublishing}
@@ -207,6 +299,81 @@ export const QueueManager: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal Edit */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-indigo-600" />
+                Edit Postingan
+              </h3>
+              <button
+                onClick={() => setEditingPost(null)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1.5">
+                  Konten Utama
+                </label>
+                <textarea
+                  value={editMain}
+                  onChange={(e) => setEditMain(e.target.value)}
+                  rows={5}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1.5">
+                  Balasan / Affiliate Link
+                </label>
+                <textarea
+                  value={editReply}
+                  onChange={(e) => setEditReply(e.target.value)}
+                  rows={4}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1.5">
+                  Jadwal (kosongkan untuk draft)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editSchedule}
+                  onChange={(e) => setEditSchedule(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-100">
+              <button
+                onClick={() => setEditingPost(null)}
+                className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={saving || !editMain.trim()}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {saving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                Simpan Perubahan
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

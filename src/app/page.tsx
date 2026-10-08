@@ -60,7 +60,7 @@ export default function Home() {
         <DashboardOverview onNavigate={(tab) => setCurrentTab(tab)} />
       )}
 
-      {currentTab === "generate" && <AIStudio />}
+      {currentTab === "generate" && <AIStudio onViewQueue={() => setCurrentTab("queue")} />}
 
       {currentTab === "viral-replier" && <ViralReplier />}
 

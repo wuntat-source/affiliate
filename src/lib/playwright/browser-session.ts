@@ -1,6 +1,27 @@
-import { chromium, Browser, BrowserContext, Page } from "playwright";
+import { firefox, Browser, BrowserContext, Page } from "playwright";
 import path from "path";
 import fs from "fs";
+
+/**
+ * Bangun konfigurasi proxy Playwright dari environment variable.
+ * Diperlukan karena jaringan VM memblokir koneksi langsung (ERR_TUNNEL_CONNECTION_FAILED).
+ */
+export function getPlaywrightProxy(): { server: string; username?: string; password?: string } | undefined {
+  const raw = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY;
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    const server = `${u.protocol}//${u.hostname}${u.port ? ":" + u.port : ""}`;
+    const cfg: { server: string; username?: string; password?: string } = { server };
+    if (u.username) {
+      cfg.username = decodeURIComponent(u.username);
+      cfg.password = decodeURIComponent(u.password);
+    }
+    return cfg;
+  } catch {
+    return undefined;
+  }
+}
 
 const SESSIONS_DIR = path.resolve(process.cwd(), ".sessions");
 if (!fs.existsSync(SESSIONS_DIR)) {
@@ -56,18 +77,12 @@ export async function openInteractiveBrowser(
   ];
 
   let browser: Browser | null = null;
-  const launchConfigs = [
-    { channel: "chrome" as const, headless: false, args: launchArgs },
-    { channel: "msedge" as const, headless: false, args: launchArgs },
-    { headless: false, args: launchArgs },
-  ];
-
-  for (const config of launchConfigs) {
-    try {
-      browser = await chromium.launch(config);
-      break;
-    } catch {}
-  }
+  try {
+    browser = await firefox.launch({
+      headless: false,
+      proxy: getPlaywrightProxy(),
+    });
+  } catch {}
 
   if (!browser) {
     return {
@@ -78,9 +93,10 @@ export async function openInteractiveBrowser(
 
   try {
     const context = await browser.newContext({
+      ignoreHTTPSErrors: true,
       viewport: null,
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/155.0",
       storageState: fs.existsSync(statePath) ? statePath : undefined,
     });
 
@@ -276,8 +292,9 @@ export async function postThreadViaPlaywright(options: {
 
   let browser: Browser | null = null;
   try {
-    browser = await chromium.launch({
+    browser = await firefox.launch({
       headless,
+      proxy: getPlaywrightProxy(),
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -289,10 +306,11 @@ export async function postThreadViaPlaywright(options: {
     });
 
     const context = await browser.newContext({
+      ignoreHTTPSErrors: true,
       storageState: statePath,
       viewport: { width: 1280, height: 800 },
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/155.0",
     });
 
     const page = await context.newPage();

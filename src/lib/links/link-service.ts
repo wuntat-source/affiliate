@@ -34,6 +34,7 @@ export async function createOrUpdateAffiliateLink(input: CreateAffiliateLinkInpu
   try {
     const link = await prisma.affiliateLink.create({
       data: {
+        userId: input.userId || null,
         productId: input.productId,
         originalUrl: input.originalUrl,
         platform: input.platform || "SHOPEE",

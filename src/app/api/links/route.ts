@@ -10,7 +10,9 @@ export async function GET(request: NextRequest) {
     const userCtx = getUserContext(request);
 
     try {
+      const userFilter = userCtx.isAdmin ? {} : { userId: userCtx.userId };
       const links = await prisma.affiliateLink.findMany({
+        where: userFilter,
         include: {
           product: { select: { id: true, name: true, category: true } },
           _count: { select: { clicks: true, posts: true } },

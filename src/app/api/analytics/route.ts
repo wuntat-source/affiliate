@@ -8,6 +8,12 @@ export async function GET(request: NextRequest) {
     const userCtx = getUserContext(request);
 
     try {
+      // Filter per-user untuk data milik user; akun tampil semua yang aktif
+      const userFilter = userCtx.isAdmin ? {} : { userId: userCtx.userId };
+      const accountFilter = {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       const [
         totalProducts,
         totalLinks,
@@ -15,22 +21,58 @@ export async function GET(request: NextRequest) {
         publishedPosts,
         scheduledPosts,
         failedPosts,
-        recentClicks,
+        totalClicks,
+        clicksToday,
+        totalAccounts,
         topLinks,
+        clicks7d,
       ] = await Promise.all([
-        prisma.product.count(),
-        prisma.affiliateLink.count(),
-        prisma.post.count(),
-        prisma.post.count({ where: { status: "PUBLISHED" } }),
-        prisma.post.count({ where: { status: "SCHEDULED" } }),
-        prisma.post.count({ where: { status: "FAILED" } }),
-        prisma.linkClick.count(),
+        prisma.product.count({ where: userFilter }),
+        prisma.affiliateLink.count({ where: userFilter }),
+        prisma.post.count({ where: userFilter }),
+        prisma.post.count({ where: { ...userFilter, status: "PUBLISHED" } }),
+        prisma.post.count({ where: { ...userFilter, status: "SCHEDULED" } }),
+        prisma.post.count({ where: { ...userFilter, status: "FAILED" } }),
+        prisma.affiliateLink.aggregate({
+          where: userFilter,
+          _sum: { totalClicks: true },
+        }).then((r) => r._sum.totalClicks || 0),
+        prisma.linkClick.count({
+          where: { clickedAt: { gte: today } },
+        }),
+        prisma.account.count({
+          where: { ...accountFilter, status: "ACTIVE" },
+        }),
         prisma.affiliateLink.findMany({
+          where: userFilter,
           take: 5,
           orderBy: { totalClicks: "desc" },
           include: { product: true },
         }),
+        prisma.linkClick.groupBy({
+          by: ["clickedAt"],
+          _count: true,
+          where: {
+            clickedAt: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            },
+          },
+        }),
       ]);
+
+      // Bentuk data tren 7 hari
+      const chartTrend = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000);
+        const key = d.toISOString().slice(0, 10);
+        const count = clicks7d
+          .filter((c: any) => c.clickedAt.toISOString().slice(0, 10) === key)
+          .reduce((s: number, c: any) => s + c._count, 0);
+        return {
+          date: key,
+          label: d.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+          value: count,
+        };
+      });
 
       return NextResponse.json({
         success: true,
@@ -41,8 +83,11 @@ export async function GET(request: NextRequest) {
           publishedPosts,
           scheduledPosts,
           failedPosts,
-          totalClicks: recentClicks,
+          totalClicks,
+          clicksToday,
+          totalAccounts,
           topLinks,
+          chartTrend,
         },
       });
     } catch {

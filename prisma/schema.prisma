@@ -60,6 +60,7 @@ enum ContentTone {
 
 model Account {
   id              String         @id @default(cuid())
+  userId          String?        // pemilik akun (isolasi data per user)
   platform        PlatformType
   accountName     String
   username        String
@@ -84,6 +85,7 @@ model Account {
 
 model Product {
   id              String            @id @default(cuid())
+  userId          String?
   name            String
   brand           String?
   category        String            @default("General")
@@ -108,6 +110,7 @@ model Product {
 
 model AffiliateLink {
   id              String            @id @default(cuid())
+  userId          String?
   productId       String
   product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   platform        AffiliatePlatform @default(SHOPEE)
@@ -205,6 +208,7 @@ model Campaign {
 
 model Post {
   id               String          @id @default(cuid())
+  userId           String?
   accountId        String
   account          Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
   productId        String?

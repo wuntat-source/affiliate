@@ -11,9 +11,16 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const userCtx = getUserContext(request);
 
+    // Ambil dari database DAN mockStore, lalu gabungkan
+    // (mockStore berisi postingan lama yang belum dimigrasi ke DB)
+    let dbPosts: any[] = [];
     try {
-      const posts = await prisma.post.findMany({
-        where: status ? { status: status as any } : undefined,
+      const userFilter = userCtx.isAdmin ? {} : { userId: userCtx.userId };
+      dbPosts = await prisma.post.findMany({
+        where: {
+          ...userFilter,
+          ...(status ? { status: status as any } : {}),
+        },
         include: {
           account: true,
           product: true,
@@ -23,24 +30,30 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       });
-
-      return NextResponse.json({ success: true, data: posts });
     } catch {
-      const allPosts = mockStore.posts;
-
-      // Admin sees all posts; Members only see their own
-      let filtered = userCtx.isAdmin
-        ? allPosts
-        : allPosts.filter(
-            (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
-          );
-
-      if (status) {
-        filtered = filtered.filter((p) => p.status === status);
-      }
-
-      return NextResponse.json({ success: true, data: filtered });
+      dbPosts = [];
     }
+
+    // mockStore posts (filter per user + status)
+    let mockPosts = userCtx.isAdmin
+      ? mockStore.posts
+      : mockStore.posts.filter(
+          (p) => (p.userId || "usr_admin_kenzie") === userCtx.userId
+        );
+    if (status) {
+      mockPosts = mockPosts.filter((p) => p.status === status);
+    }
+
+    // Gabungkan, hindari duplikat ID
+    const dbIds = new Set(dbPosts.map((p) => p.id));
+    const combined = [...dbPosts, ...mockPosts.filter((p) => !dbIds.has(p.id))];
+    // Urutkan berdasarkan createdAt terbaru
+    combined.sort(
+      (a, b) =>
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    return NextResponse.json({ success: true, data: combined });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "Failed to fetch post queue" },
@@ -65,6 +78,7 @@ export async function POST(request: NextRequest) {
     try {
       const post = await prisma.post.create({
         data: {
+          userId: userCtx.userId,
           accountId,
           productId: productId || null,
           affiliateLinkId: affiliateLinkId || null,
