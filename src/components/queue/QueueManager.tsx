@@ -12,7 +12,7 @@ import {
   X,
   Save,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, wibToISOString, isoToWibLocal } from "@/lib/utils";
 import { getAuthHeaders } from "@/lib/auth";
 
 interface PostItem {
@@ -63,12 +63,8 @@ export const QueueManager: React.FC = () => {
     setEditingPost(p);
     setEditMain(p.mainContent);
     setEditReply(p.replyContent || "");
-    // Format datetime-local: YYYY-MM-DDTHH:mm
-    setEditSchedule(
-      p.scheduledAt
-        ? new Date(p.scheduledAt).toISOString().slice(0, 16)
-        : ""
-    );
+    // Tampilkan dalam WIB
+    setEditSchedule(p.scheduledAt ? isoToWibLocal(p.scheduledAt) : "");
   }
 
   async function handleSaveEdit() {
@@ -81,7 +77,8 @@ export const QueueManager: React.FC = () => {
         body: JSON.stringify({
           mainContent: editMain,
           replyContent: editReply,
-          scheduledAt: editSchedule || null,
+          // Kirim sebagai UTC (input dianggap WIB)
+          scheduledAt: editSchedule ? wibToISOString(editSchedule) : null,
         }),
       });
       const data = await res.json();

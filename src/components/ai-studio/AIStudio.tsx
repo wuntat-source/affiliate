@@ -23,6 +23,7 @@ import {
   Square,
 } from "lucide-react";
 import { getAuthHeaders } from "@/lib/auth";
+import { wibToISOString } from "@/lib/utils";
 
 interface Product {
   id: string;
@@ -256,7 +257,7 @@ export const AIStudio: React.FC<AIStudioProps> = ({ onViewQueue }) => {
             productId: selectedProductId || undefined,
             mainContent: effectiveMain,
             replyContent: effectiveReply,
-            scheduledAt: immediate ? undefined : scheduleTime || undefined,
+            scheduledAt: immediate ? undefined : scheduleTime ? wibToISOString(scheduleTime) : undefined,
           }),
         });
 

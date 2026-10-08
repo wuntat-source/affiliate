@@ -65,7 +65,6 @@ export const ViralReplier: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState("");
 
   // Trending Discovery States
-  const [trendingNiche, setTrendingNiche] = useState<string>("ALL");
   const [trendingPosts, setTrendingPosts] = useState<TrendingPostItem[]>([]);
   const [trendingLive, setTrendingLive] = useState(false);
   const [trendingLoading, setTrendingLoading] = useState(false);
@@ -97,7 +96,7 @@ export const ViralReplier: React.FC = () => {
   useEffect(() => {
     fetchProducts();
     fetchAccounts();
-    fetchTrendingPosts("ALL");
+    fetchTrendingPosts();
   }, []);
 
   async function fetchProducts() {
@@ -130,10 +129,10 @@ export const ViralReplier: React.FC = () => {
     }
   }
 
-  async function fetchTrendingPosts(niche = trendingNiche) {
+  async function fetchTrendingPosts() {
     setTrendingLoading(true);
     try {
-      const res = await fetch(`/api/viral-reply/discover?niche=${niche}`, {
+      const res = await fetch(`/api/viral-reply/discover?niche=ALL`, {
         headers: getAuthHeaders(),
       });
       const data = await res.json();
@@ -336,31 +335,6 @@ export const ViralReplier: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Niche Filter Pills */}
-            <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs">
-              {[
-                { id: "ALL", label: "Semua" },
-                { id: "WFC", label: "WFC & Produktivitas" },
-                { id: "GADGET", label: "Gadget & Setup" },
-                { id: "LIFESTYLE", label: "Lifestyle & Sehat" },
-              ].map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => {
-                    setTrendingNiche(n.id);
-                    fetchTrendingPosts(n.id);
-                  }}
-                  className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                    trendingNiche === n.id
-                      ? "bg-white text-orange-600 font-semibold shadow-2xs border border-slate-200"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  {n.label}
-                </button>
-              ))}
-            </div>
-
             <button
               onClick={() => fetchTrendingPosts()}
               className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"

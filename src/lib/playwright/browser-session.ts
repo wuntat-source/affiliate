@@ -170,7 +170,8 @@ export async function verifyAndSaveSession(
 }
 
 /**
- * Check if the stored session is authenticated
+ * Check if the stored session is authenticated.
+ * Melakukan verifikasi nyata ke threads.com (bukan cuma cek file).
  */
 export async function checkLoginStatus(
   platform: "THREADS" | "TWITTER",
@@ -185,7 +186,7 @@ export async function checkLoginStatus(
     };
   }
 
-  // Check from saved cookies in storage state file
+  // Cek cepat: pastikan ada cookie auth di file
   try {
     const raw = JSON.parse(fs.readFileSync(statePath, "utf-8"));
     const hasAuthCookie = (raw.cookies || []).some(
@@ -195,19 +196,68 @@ export async function checkLoginStatus(
         c.name === "auth_token" ||
         c.name === "twid"
     );
-
-    if (hasAuthCookie) {
+    if (!hasAuthCookie) {
       return {
-        loggedIn: true,
-        message: `✅ Sesi browser untuk @${username} AKTIF & Siap Auto-Post!`,
+        loggedIn: false,
+        message: `⚠️ Sesi login @${username} belum terautentikasi (cookie login belum ditemukan). Silakan login ulang.`,
       };
     }
-  } catch {}
+  } catch {
+    return {
+      loggedIn: false,
+      message: `⚠️ File sesi @${username} rusak. Silakan login ulang.`,
+    };
+  }
 
-  return {
-    loggedIn: false,
-    message: `⚠️ Sesi login @${username} belum terautentikasi (cookie login belum ditemukan). Silakan klik 'Buka Browser Login Threads' dan login ke akun Threads Anda.`,
-  };
+  // Verifikasi nyata: buka threads.com dan pastikan tidak diarahkan ke halaman login
+  let browser: any = null;
+  try {
+    const { firefox } = await import("playwright");
+    browser = await firefox.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    });
+    const context = await browser.newContext({
+      storageState: statePath,
+      ignoreHTTPSErrors: true,
+      viewport: { width: 1280, height: 800 },
+    });
+    const page = await context.newPage();
+    await page.goto("https://www.threads.com/", {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
+    await page.waitForTimeout(5000);
+
+    // Jika muncul panel "Log in or sign up", berarti sesi habis
+    const loginPrompt = await page
+      .getByText("Log in or sign up for Threads", { exact: false })
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
+
+    await browser.close();
+
+    if (loginPrompt) {
+      return {
+        loggedIn: false,
+        message: `⚠️ Sesi @${username} sudah kedaluwarsa (Threads meminta login ulang). Tempel cookie sessionid baru via Metode 1.`,
+      };
+    }
+    return {
+      loggedIn: true,
+      message: `✅ Sesi browser untuk @${username} AKTIF & Siap Auto-Post!`,
+    };
+  } catch (e: any) {
+    try {
+      await browser?.close();
+    } catch {}
+    // Jika verifikasi gagal karena jaringan, anggap sesi masih ada (berdasar cookie)
+    return {
+      loggedIn: true,
+      message: `✅ Sesi browser untuk @${username} AKTIF (berdasar cookie tersimpan; verifikasi live gagal: ${e.message?.slice(0, 60)}).`,
+    };
+  }
 }
 
 function chunkTextForThreads(text: string, maxLen = 450): string[] {

@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
             suggestedPainPoint: "",
           });
         }
-        if (scraped.length >= 8) break;
+        if (scraped.length >= 10) break;
       }
       if (scraped.length > 0) {
         results = scraped;
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: results,
+      data: results.slice(0, 10),
       live: isLive,
     });
   } catch (error: any) {
